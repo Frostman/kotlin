@@ -30,11 +30,11 @@ import com.intellij.openapi.ui.popup.util.BaseListPopupStep;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
-import com.intellij.util.PlatformIcons;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.jet.lang.psi.JetFile;
-import org.jetbrains.jet.lang.resolve.FqName;
+import org.jetbrains.jet.plugin.JetBundle;
 import org.jetbrains.jet.plugin.quickfix.ImportInsertHelper;
+import org.jetbrains.jet.plugin.quickfix.JetElementSuggestion;
 
 import javax.swing.*;
 import java.util.List;
@@ -50,7 +50,7 @@ public class JetAddImportAction implements QuestionAction {
     private final Project myProject;
     private final Editor myEditor;
     private final PsiElement myElement;
-    private final List<FqName> possibleImports;
+    private final List<JetElementSuggestion> possibleImports;
 
     /**
      * @param project Project where action takes place.
@@ -62,7 +62,7 @@ public class JetAddImportAction implements QuestionAction {
             @NotNull Project project,
             @NotNull Editor editor,
             @NotNull PsiElement element,
-            @NotNull Iterable<FqName> imports
+            @NotNull Iterable<JetElementSuggestion> imports
     ) {
         myProject = project;
         myEditor = editor;
@@ -91,14 +91,14 @@ public class JetAddImportAction implements QuestionAction {
     }
 
     protected BaseListPopupStep getImportSelectionPopup() {
-        return new BaseListPopupStep<FqName>(QuickFixBundle.message("class.to.import.chooser.title"), possibleImports) {
+        return new BaseListPopupStep<JetElementSuggestion>(JetBundle.message("import.chooser.title"), possibleImports) {
             @Override
             public boolean isAutoSelectionEnabled() {
                 return false;
             }
 
             @Override
-            public PopupStep onChosen(FqName selectedValue, boolean finalChoice) {
+            public PopupStep onChosen(JetElementSuggestion selectedValue, boolean finalChoice) {
                 if (selectedValue == null) {
                     return FINAL_CHOICE;
                 }
@@ -129,25 +129,24 @@ public class JetAddImportAction implements QuestionAction {
             }
 
             @Override
-            public boolean hasSubstep(FqName selectedValue) {
+            public boolean hasSubstep(JetElementSuggestion selectedValue) {
                 return true;
             }
 
             @NotNull
             @Override
-            public String getTextFor(FqName value) {
+            public String getTextFor(JetElementSuggestion value) {
                 return value.getFqName();
             }
 
             @Override
-            public Icon getIconFor(FqName aValue) {
-                // TODO: change icon
-                return PlatformIcons.CLASS_ICON;
+            public Icon getIconFor(JetElementSuggestion value) {
+                return value.getIcon();
             }
         };
     }
 
-    protected static void addImport(final PsiElement element, final Project project, final FqName selectedImport) {
+    protected static void addImport(final PsiElement element, final Project project, final JetElementSuggestion selectedImport) {
         PsiDocumentManager.getInstance(project).commitAllDocuments();
 
         CommandProcessor.getInstance().executeCommand(project, new Runnable() {
@@ -158,7 +157,7 @@ public class JetAddImportAction implements QuestionAction {
                     public void run() {
                         PsiFile file = element.getContainingFile();
                         if (!(file instanceof JetFile)) return;
-                        ImportInsertHelper.addImportDirective(selectedImport,
+                        ImportInsertHelper.addImportDirective(selectedImport.getName(),
                                 (JetFile) file
                         );
                     }

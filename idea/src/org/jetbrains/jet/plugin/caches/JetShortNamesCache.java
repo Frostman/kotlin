@@ -19,6 +19,7 @@ package org.jetbrains.jet.plugin.caches;
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Collections2;
+import com.google.common.collect.Lists;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Condition;
 import com.intellij.psi.PsiClass;
@@ -43,6 +44,7 @@ import org.jetbrains.jet.lang.types.expressions.ExpressionTypingUtils;
 import org.jetbrains.jet.lang.types.lang.JetStandardClasses;
 import org.jetbrains.jet.lang.types.lang.JetStandardLibrary;
 import org.jetbrains.jet.plugin.compiler.WholeProjectAnalyzerFacade;
+import org.jetbrains.jet.plugin.quickfix.JetElementSuggestion;
 import org.jetbrains.jet.plugin.stubindex.JetExtensionFunctionNameIndex;
 import org.jetbrains.jet.plugin.stubindex.JetFullClassNameIndex;
 import org.jetbrains.jet.plugin.stubindex.JetShortClassNameIndex;
@@ -56,6 +58,7 @@ import java.util.*;
  * All those declaration are planned to be used in completion.
  *
  * @author Nikolay Krasko
+ * @author slukjanov aka Frostman
  */
 public class JetShortNamesCache extends PsiShortNamesCache {
 
@@ -139,6 +142,26 @@ public class JetShortNamesCache extends PsiShortNamesCache {
         });
     }
 
+    @NotNull
+    public Collection<JetElementSuggestion> getJetClassElementSuggestions(@NotNull final String name, @NotNull GlobalSearchScope scope) {
+        final BindingContext context = getResolutionContext(scope);
+        return Collections2.transform(
+            Collections2.filter(context.getKeys(BindingContext.FQNAME_TO_CLASS_DESCRIPTOR), new Predicate<FqName>() {
+                @Override
+                public boolean apply(@Nullable FqName fqName) {
+                    return fqName != null && QualifiedNamesUtil.isShortNameForFQN(name, fqName);
+                }
+            }), new Function<FqName, JetElementSuggestion>() {
+            @Override
+            public JetElementSuggestion apply(@Nullable FqName fqName) {
+                ClassDescriptor descriptor = context.get(BindingContext.FQNAME_TO_CLASS_DESCRIPTOR, fqName);
+                PsiElement element = context.get(BindingContext.DESCRIPTOR_TO_DECLARATION, descriptor);
+
+                return new JetElementSuggestion(fqName, element);
+            }
+        });
+    }
+
     /**
      * Get jet non-extension top-level function names. Method is allowed to give invalid names - all result should be
      * checked with getTopLevelFunctionDescriptorsByName().
@@ -189,6 +212,42 @@ public class JetShortNamesCache extends PsiShortNamesCache {
             SimpleFunctionDescriptor functionDescriptor = context.get(BindingContext.FUNCTION, jetNamedFunction);
             if (functionDescriptor != null) {
                 result.add(functionDescriptor);
+            }
+        }
+
+        return result;
+    }
+
+    // TODO: Make it work for properties
+    @NotNull
+    public Collection<JetElementSuggestion> getTopLevelFunctionElementSuggestions(
+        @NotNull String name,
+        @NotNull JetSimpleNameExpression expression,
+        @NotNull GlobalSearchScope scope
+    ) {
+        List<JetElementSuggestion> result = Lists.newArrayList();
+
+        BindingContext context = WholeProjectAnalyzerFacade.analyzeProjectWithCacheOnAFile((JetFile)expression.getContainingFile());
+        JetScope jetScope = context.get(BindingContext.RESOLUTION_SCOPE, expression);
+
+        if (jetScope == null) {
+            return result;
+        }
+
+        Collection<PsiMethod> topLevelFunctionPrototypes =
+            JetFromJavaDescriptorHelper.getTopLevelFunctionPrototypesByName(name, project, scope);
+        for (PsiMethod method : topLevelFunctionPrototypes) {
+            FqName fqName = JetFromJavaDescriptorHelper.getJetTopLevelDeclarationFQN(method);
+            if (fqName != null) {
+                result.add(new JetElementSuggestion(fqName, method));
+            }
+        }
+
+        Collection<JetNamedFunction> jetNamedFunctions = JetShortFunctionNameIndex.getInstance().get(name, project, scope);
+        for (JetNamedFunction function : jetNamedFunctions) {
+            SimpleFunctionDescriptor functionDescriptor = context.get(BindingContext.FUNCTION, function);
+            if (functionDescriptor != null) {
+                result.add(new JetElementSuggestion(DescriptorUtils.getFQName(functionDescriptor).toSafe(), function));
             }
         }
 
@@ -277,6 +336,48 @@ public class JetShortNamesCache extends PsiShortNamesCache {
         }
 
         return resultDescriptors;
+    }
+
+    // TODO: Make it work for properties
+    public Collection<JetElementSuggestion> getCallableExtensionElementSuggestions(
+        @NotNull String referenceName,
+        @NotNull JetSimpleNameExpression expression,
+        @NotNull GlobalSearchScope searchScope
+    ) {
+        Collection<JetElementSuggestion> result = Lists.newArrayList();
+
+        JetFile jetFile = (JetFile)expression.getContainingFile();
+        BindingContext context = WholeProjectAnalyzerFacade.analyzeProjectWithCacheOnAFile(jetFile);
+        JetExpression receiverExpression = expression.getReceiverExpression();
+
+        if (receiverExpression != null) {
+            JetType expressionType = context.get(BindingContext.EXPRESSION_TYPE, receiverExpression);
+            JetScope scope = context.get(BindingContext.RESOLUTION_SCOPE, receiverExpression);
+
+            if (expressionType != null && scope != null) {
+                Collection<String> extensionFunctionsNames = getAllJetExtensionFunctionsNames(searchScope);
+
+                // Collect all possible extension function qualified names
+                for (String name : extensionFunctionsNames) {
+                    if (referenceName.equals(name)) {
+                        for (PsiElement extensionFunction : getJetExtensionFunctionsByName(name, searchScope)) {
+                            FqName fqName = null;
+                            if (extensionFunction instanceof JetNamedFunction) {
+                                fqName = JetPsiUtil.getFQName((JetNamedFunction)extensionFunction);
+                            }
+                            else if (extensionFunction instanceof PsiMethod) {
+                                fqName = JetFromJavaDescriptorHelper.getJetTopLevelDeclarationFQN((PsiMethod)extensionFunction);
+                            }
+                            if (fqName != null) {
+                                result.add(new JetElementSuggestion(fqName, extensionFunction));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return result;
     }
 
     public Collection<JetNamedFunction> getJetFunctionsByName(@NonNls @NotNull String name, @NotNull GlobalSearchScope scope) {

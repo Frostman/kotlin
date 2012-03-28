@@ -20,8 +20,6 @@ import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
-import com.intellij.codeInsight.daemon.QuickFixBundle;
 import com.intellij.codeInsight.daemon.impl.ShowAutoImportPass;
 import com.intellij.codeInsight.hint.HintManager;
 import com.intellij.codeInsight.intention.HighPriorityAction;
@@ -29,7 +27,6 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.command.CommandProcessor;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.Condition;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiClass;
@@ -40,37 +37,38 @@ import com.intellij.psi.search.PsiShortNamesCache;
 import com.intellij.util.IncorrectOperationException;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.jet.lang.descriptors.DeclarationDescriptor;
-import org.jetbrains.jet.lang.descriptors.FunctionDescriptor;
 import org.jetbrains.jet.lang.diagnostics.Diagnostic;
 import org.jetbrains.jet.lang.psi.JetFile;
 import org.jetbrains.jet.lang.psi.JetSimpleNameExpression;
-import org.jetbrains.jet.lang.resolve.DescriptorUtils;
 import org.jetbrains.jet.lang.resolve.FqName;
 import org.jetbrains.jet.lang.resolve.ImportPath;
+import org.jetbrains.jet.plugin.JetBundle;
 import org.jetbrains.jet.plugin.JetFileType;
 import org.jetbrains.jet.plugin.actions.JetAddImportAction;
 import org.jetbrains.jet.plugin.caches.JetCacheManager;
 import org.jetbrains.jet.plugin.caches.JetShortNamesCache;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Check possibility and perform fix for unresolved references.
  *
  * @author Nikolay Krasko
+ * @author slukjanov aka Frostman
  */
 public class ImportClassAndFunFix extends JetHintAction<JetSimpleNameExpression> implements HighPriorityAction {
 
     @NotNull
-    private final Collection<FqName> suggestions;
+    private final Collection<JetElementSuggestion> suggestions;
 
     public ImportClassAndFunFix(@NotNull JetSimpleNameExpression element) {
         super(element);
         suggestions = computeSuggestions(element);
     }
 
-    private static Collection<FqName> computeSuggestions(@NotNull JetSimpleNameExpression element) {
+    private static Collection<JetElementSuggestion> computeSuggestions(@NotNull JetSimpleNameExpression element) {
         final PsiFile file = element.getContainingFile();
         if (!(file instanceof JetFile)) {
             return Collections.emptyList();
@@ -84,90 +82,46 @@ public class ImportClassAndFunFix extends JetHintAction<JetSimpleNameExpression>
 
         assert referenceName != null;
 
-        List<FqName> result = Lists.newArrayList();
-        result.addAll(getClassNames(referenceName, file.getProject()));
-        result.addAll(getJetTopLevelFunctions(referenceName, element, file.getProject()));
-        result.addAll(getJetExtensionFunctions(referenceName, element, file.getProject()));
-
-        return Collections2.filter(result, new Predicate<FqName>() {
-            @Override
-            public boolean apply(@Nullable FqName fqName) {
-                assert fqName != null;
-                return ImportInsertHelper.doNeedImport(new ImportPath(fqName, false), null, (JetFile) file);
-            }
-        });
-    }
-    
-    private static Collection<FqName> getJetTopLevelFunctions(@NotNull String referenceName, JetSimpleNameExpression expression, @NotNull Project project) {
+        Project project = file.getProject();
+        GlobalSearchScope scope = GlobalSearchScope.allScope(project);
         JetShortNamesCache namesCache = JetCacheManager.getInstance(project).getNamesCache();
-        Collection<FunctionDescriptor> topLevelFunctions = namesCache.getTopLevelFunctionDescriptorsByName(
-                referenceName,
-                expression,
-                GlobalSearchScope.allScope(project));
 
-        return Collections2.transform(topLevelFunctions, new Function<DeclarationDescriptor, FqName>() {
+        List<JetElementSuggestion> result = Lists.newArrayList();
+        result.addAll(namesCache.getJetClassElementSuggestions(referenceName, scope));
+        result.addAll(getJavaClassElementSuggestions(referenceName, project, scope));
+        result.addAll(namesCache.getTopLevelFunctionElementSuggestions(referenceName, element, scope));
+        result.addAll(namesCache.getCallableExtensionElementSuggestions(referenceName, element, scope));
+
+        return Collections2.filter(result, new Predicate<JetElementSuggestion>() {
             @Override
-            public FqName apply(@Nullable DeclarationDescriptor declarationDescriptor) {
-                assert declarationDescriptor != null;
-                return DescriptorUtils.getFQName(declarationDescriptor).toSafe();
+            public boolean apply(@Nullable JetElementSuggestion suggestion) {
+                assert suggestion != null;
+                return ImportInsertHelper.doNeedImport(new ImportPath(suggestion.getName(), false), null, (JetFile) file);
             }
         });
     }
 
-    private static Collection<FqName> getJetExtensionFunctions(
-            @NotNull final String referenceName,
-            @NotNull JetSimpleNameExpression expression,
-            @NotNull Project project
+    private static Collection<JetElementSuggestion> getJavaClassElementSuggestions(
+        @NotNull String name,
+        @NotNull Project project,
+        @NotNull GlobalSearchScope scope
     ) {
-        JetShortNamesCache namesCache = JetCacheManager.getInstance(project).getNamesCache();
-        Collection<DeclarationDescriptor> jetCallableExtensions = namesCache.getJetCallableExtensions(
-                new Condition<String>() {
-                    @Override
-                    public boolean value(String callableExtensionName) {
-                        return callableExtensionName.equals(referenceName);
-                    }
-                },
-                expression,
-                GlobalSearchScope.allScope(project));
-
-        return Collections2.transform(jetCallableExtensions, new Function<DeclarationDescriptor, FqName>() {
-            @Override
-            public FqName apply(@Nullable DeclarationDescriptor declarationDescriptor) {
-                assert declarationDescriptor != null;
-                return DescriptorUtils.getFQName(declarationDescriptor).toSafe();
-            }
-        });
-    }
-
-    /*
-     * Searches for possible class names in kotlin context and java facade.
-     */
-    public static ArrayList<FqName> getClassNames(@NotNull String referenceName, @NotNull Project project) {
-        final GlobalSearchScope scope = GlobalSearchScope.allScope(project);
-        Set<FqName> possibleResolveNames = Sets.newHashSet();
-        possibleResolveNames.addAll(JetCacheManager.getInstance(project).getNamesCache().getFQNamesByName(referenceName, scope));
-        possibleResolveNames.addAll(getJavaClasses(referenceName, project, scope));
-
-        // TODO: Do appropriate sorting
-        return Lists.newArrayList(possibleResolveNames);
-    }
-
-    private static Collection<FqName> getJavaClasses(@NotNull final String typeName, @NotNull Project project, final GlobalSearchScope scope) {
         PsiShortNamesCache cache = PsiShortNamesCache.getInstance(project);
 
-        PsiClass[] classes = cache.getClassesByName(typeName, new DelegatingGlobalSearchScope(scope) {
+        PsiClass[] classes = cache.getClassesByName(name, new DelegatingGlobalSearchScope(scope) {
             @Override
             public boolean contains(@NotNull VirtualFile file) {
                 return myBaseScope.contains(file) && file.getFileType() != JetFileType.INSTANCE;
             }
         });
 
-        return Collections2.transform(Lists.newArrayList(classes), new Function<PsiClass, FqName>() {
-            @Nullable
+        return Collections2.transform(Lists.newArrayList(classes), new Function<PsiClass, JetElementSuggestion>() {
             @Override
-            public FqName apply(@Nullable PsiClass javaClass) {
+            public JetElementSuggestion apply(@Nullable PsiClass javaClass) {
                 assert javaClass != null;
-                return new FqName(javaClass.getQualifiedName());
+                String qualifiedName = javaClass.getQualifiedName();
+                assert qualifiedName != null;
+                return new JetElementSuggestion(new FqName(qualifiedName), javaClass);
             }
         });
     }
@@ -202,13 +156,13 @@ public class ImportClassAndFunFix extends JetHintAction<JetSimpleNameExpression>
     @Override
     @NotNull
     public String getText() {
-        return QuickFixBundle.message("import.class.fix");
+        return JetBundle.message("import.fix");
     }
 
     @Override
     @NotNull
     public String getFamilyName() {
-        return QuickFixBundle.message("import.class.fix");
+        return JetBundle.message("import.fix");
     }
 
     @Override
