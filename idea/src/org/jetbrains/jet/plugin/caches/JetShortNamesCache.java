@@ -229,7 +229,7 @@ public class JetShortNamesCache extends PsiShortNamesCache {
         List<JetElementSuggestion> result = Lists.newArrayList();
         Set<String> fqNames = Sets.newHashSet();
 
-        BindingContext context = WholeProjectAnalyzerFacade.analyzeProjectWithCacheOnAFile((JetFile)expression.getContainingFile());
+        BindingContext context = WholeProjectAnalyzerFacade.analyzeProjectWithCacheOnAFile((JetFile)expression.getContainingFile()).getBindingContext();
         JetScope jetScope = context.get(BindingContext.RESOLUTION_SCOPE, expression);
 
         if (jetScope == null) {
@@ -355,7 +355,7 @@ public class JetShortNamesCache extends PsiShortNamesCache {
         Set<String> fqNames = Sets.newHashSet();
 
         JetFile jetFile = (JetFile)expression.getContainingFile();
-        BindingContext context = WholeProjectAnalyzerFacade.analyzeProjectWithCacheOnAFile(jetFile);
+        BindingContext context = WholeProjectAnalyzerFacade.analyzeProjectWithCacheOnAFile(jetFile).getBindingContext();
         JetExpression receiverExpression = expression.getReceiverExpression();
 
         if (receiverExpression != null) {
