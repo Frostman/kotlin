@@ -20,6 +20,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Condition;
 import com.intellij.psi.PsiClass;
@@ -226,6 +227,7 @@ public class JetShortNamesCache extends PsiShortNamesCache {
         @NotNull GlobalSearchScope scope
     ) {
         List<JetElementSuggestion> result = Lists.newArrayList();
+        Set<String> fqNames = Sets.newHashSet();
 
         BindingContext context = WholeProjectAnalyzerFacade.analyzeProjectWithCacheOnAFile((JetFile)expression.getContainingFile());
         JetScope jetScope = context.get(BindingContext.RESOLUTION_SCOPE, expression);
@@ -238,8 +240,9 @@ public class JetShortNamesCache extends PsiShortNamesCache {
             JetFromJavaDescriptorHelper.getTopLevelFunctionPrototypesByName(name, project, scope);
         for (PsiMethod method : topLevelFunctionPrototypes) {
             FqName fqName = JetFromJavaDescriptorHelper.getJetTopLevelDeclarationFQN(method);
-            if (fqName != null) {
+            if (fqName != null && !fqNames.contains(fqName.getFqName())) {
                 result.add(new JetElementSuggestion(fqName, method));
+                fqNames.add(fqName.getFqName());
             }
         }
 
@@ -247,7 +250,11 @@ public class JetShortNamesCache extends PsiShortNamesCache {
         for (JetNamedFunction function : jetNamedFunctions) {
             SimpleFunctionDescriptor functionDescriptor = context.get(BindingContext.FUNCTION, function);
             if (functionDescriptor != null) {
-                result.add(new JetElementSuggestion(DescriptorUtils.getFQName(functionDescriptor).toSafe(), function));
+                FqName fqName = DescriptorUtils.getFQName(functionDescriptor).toSafe();
+                if (!fqNames.contains(fqName.getFqName())) {
+                    result.add(new JetElementSuggestion(fqName, function));
+                    fqNames.add(fqName.getFqName());
+                }
             }
         }
 
@@ -345,6 +352,7 @@ public class JetShortNamesCache extends PsiShortNamesCache {
         @NotNull GlobalSearchScope searchScope
     ) {
         Collection<JetElementSuggestion> result = Lists.newArrayList();
+        Set<String> fqNames = Sets.newHashSet();
 
         JetFile jetFile = (JetFile)expression.getContainingFile();
         BindingContext context = WholeProjectAnalyzerFacade.analyzeProjectWithCacheOnAFile(jetFile);
@@ -368,8 +376,9 @@ public class JetShortNamesCache extends PsiShortNamesCache {
                             else if (extensionFunction instanceof PsiMethod) {
                                 fqName = JetFromJavaDescriptorHelper.getJetTopLevelDeclarationFQN((PsiMethod)extensionFunction);
                             }
-                            if (fqName != null) {
+                            if (fqName != null && !fqNames.contains(fqName.getFqName())) {
                                 result.add(new JetElementSuggestion(fqName, extensionFunction));
+                                fqNames.add(fqName.getFqName());
                             }
                         }
                     }
