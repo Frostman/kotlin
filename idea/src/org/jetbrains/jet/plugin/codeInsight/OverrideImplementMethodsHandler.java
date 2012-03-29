@@ -57,8 +57,8 @@ public abstract class OverrideImplementMethodsHandler implements LanguageCodeIns
 
     @NotNull
     public Set<CallableMemberDescriptor> collectMethodsToGenerate(@NotNull JetClassOrObject classOrObject) {
-        BindingContext bindingContext =
-                WholeProjectAnalyzerFacade.analyzeProjectWithCacheOnAFile((JetFile)classOrObject.getContainingFile());
+        BindingContext bindingContext = WholeProjectAnalyzerFacade.analyzeProjectWithCacheOnAFile((JetFile)classOrObject.getContainingFile())
+                .getBindingContext();
         final DeclarationDescriptor descriptor = bindingContext.get(BindingContext.DECLARATION_TO_DESCRIPTOR, classOrObject);
         if (descriptor instanceof MutableClassDescriptor) {
             return collectMethodsToGenerate((MutableClassDescriptor)descriptor);
@@ -162,7 +162,7 @@ public abstract class OverrideImplementMethodsHandler implements LanguageCodeIns
         final JetStandardLibrary stdlib = JetStandardLibrary.getInstance();
 
         if (returnType != null && !stdlib.getTuple0Type().equals(returnType)) {
-            bodyBuilder.append(" : ").append(returnType.toString());
+            bodyBuilder.append(" : ").append(DescriptorRenderer.COMPACT.renderTypeWithShortNames(returnType));
             ImportInsertHelper.addImportDirectiveIfNeeded(returnType, file);
         }
 

@@ -16,21 +16,42 @@
 
 package org.jetbrains.k2js.translate.utils.dangerous;
 
+import com.google.common.collect.Maps;
 import com.intellij.psi.PsiElement;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.jet.lang.psi.*;
+import org.jetbrains.k2js.translate.utils.PsiUtils;
+
+import java.util.Map;
+
+import static org.jetbrains.k2js.translate.utils.PsiUtils.getBaseExpression;
 
 /**
  * @author Pavel Talanov
  */
+//TODO: refactor
 public final class FindPreviousVisitor extends JetTreeVisitor<DangerousData> {
+
+    @NotNull
+    private final Map<JetElement, Void> hasDangerous = Maps.newHashMap();
+
+    public FindPreviousVisitor(@NotNull DangerousData data) {
+        JetElement node = data.getDangerousNode();
+        PsiElement last = data.getRootNode().getParent();
+        while (node != last) {
+            hasDangerous.put(node, null);
+            PsiElement parent = node.getParent();
+            assert parent instanceof JetElement;
+            node = (JetElement)parent;
+        }
+    }
 
     @Override
     public Void visitJetElement(JetElement element, DangerousData data) {
         if (data.getDangerousNode() == element) {
             return null;
         }
-        if (!hasDangerous(element, data)) {
+        if (!hasDangerous(element)) {
             addElement(element, data);
         }
         else {
@@ -52,7 +73,7 @@ public final class FindPreviousVisitor extends JetTreeVisitor<DangerousData> {
         while (current != null) {
             if (current instanceof JetElement) {
                 ((JetElement)current).accept(this, data);
-                if (hasDangerous(element, data)) {
+                if (hasDangerous(element)) {
                     break;
                 }
             }
@@ -61,11 +82,31 @@ public final class FindPreviousVisitor extends JetTreeVisitor<DangerousData> {
     }
 
     @Override
+    public Void visitPrefixExpression(@NotNull JetPrefixExpression expression, @NotNull DangerousData data) {
+        if (data.getDangerousNode() == expression) {
+            return null;
+        }
+        if (!hasDangerous(expression)) {
+            addElement(expression, data);
+            return null;
+        }
+        else {
+            if (hasDangerous(getBaseExpression(expression))) {
+                return null;
+            }
+            else {
+                //TODO:
+                throw new IllegalStateException();
+            }
+        }
+    }
+
+    @Override
     public Void visitCallExpression(@NotNull JetCallExpression expression, @NotNull DangerousData data) {
         if (data.getDangerousNode() == expression) {
             return null;
         }
-        if (!hasDangerous(expression, data)) {
+        if (!hasDangerous(expression)) {
             data.getNodesToBeGeneratedBefore().add(expression);
         }
         else {
@@ -79,30 +120,13 @@ public final class FindPreviousVisitor extends JetTreeVisitor<DangerousData> {
             JetExpression argumentExpression = argument.getArgumentExpression();
             assert argumentExpression != null;
             argumentExpression.accept(this, data);
-            if (hasDangerous(argumentExpression, data)) {
+            if (hasDangerous(argumentExpression)) {
                 break;
             }
         }
     }
 
-    private static boolean hasDangerous(@NotNull JetElement element, @NotNull DangerousData data) {
-        HasDangerousVisitor visitor = new HasDangerousVisitor();
-        element.accept(visitor, data);
-        return visitor.hasDangerous;
-    }
-
-    private static final class HasDangerousVisitor extends JetTreeVisitor<DangerousData> {
-
-        private boolean hasDangerous = false;
-
-        @Override
-        public Void visitJetElement(JetElement element, DangerousData data) {
-            if (element == data.getDangerousNode()) {
-                hasDangerous = true;
-                return null;
-            }
-            element.acceptChildren(this, data);
-            return null;
-        }
+    private boolean hasDangerous(@NotNull JetElement element) {
+        return hasDangerous.containsKey(element);
     }
 }

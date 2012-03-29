@@ -276,7 +276,7 @@ public class CallResolver {
         }
         if (traceForFirstNonemptyCandidateSet != null) {
             traceForFirstNonemptyCandidateSet.commit();
-            if (resultsForFirstNonemptyCandidateSet.singleResult()) {
+            if (resultsForFirstNonemptyCandidateSet.isSingleResult()) {
 
                 debugInfo.set(ResolutionDebugInfo.RESULT, resultsForFirstNonemptyCandidateSet.getResultingCall());
             }
@@ -436,7 +436,7 @@ public class CallResolver {
         }
         
         OverloadResolutionResultsImpl<D> results = computeResultAndReportErrors(task.trace, task.tracing, successfulCandidates, failedCandidates);
-        if (!results.singleResult()) {
+        if (!results.isSingleResult()) {
             checkTypesWithNoCallee(task.toBasic());
         }
         return results;
@@ -463,7 +463,8 @@ public class CallResolver {
             constraintSystem.registerTypeVariable(typeParameterDescriptor, Variance.INVARIANT); // TODO: variance of the occurrences
         }
 
-        TypeSubstitutor substituteDontCare = ConstraintSystemImpl.makeConstantSubstitutor(candidateWithFreshVariables.getTypeParameters(), DONT_CARE);
+        TypeSubstitutor substituteDontCare = ConstraintSystemWithPriorities
+            .makeConstantSubstitutor(candidateWithFreshVariables.getTypeParameters(), DONT_CARE);
 
         // Value parameters
         for (Map.Entry<ValueParameterDescriptor, ResolvedValueArgument> entry : candidateCall.getValueArguments().entrySet()) {
