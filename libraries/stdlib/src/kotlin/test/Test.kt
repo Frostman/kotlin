@@ -23,7 +23,7 @@ public var asserter: Asserter
             }
             //debug("using asserter $_asserter")
         }
-        return _asserter.sure()
+        return _asserter!!
     }
 
     set(value) {

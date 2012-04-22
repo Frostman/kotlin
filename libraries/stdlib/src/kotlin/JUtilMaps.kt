@@ -32,11 +32,11 @@ public inline fun <K,V> java.util.Map<K,V>?.orEmpty() : java.util.Map<K,V>
 
 /** Returns the key of the entry */
 val <K,V> JEntry<K,V>.key : K
-    get() = getKey().sure()
+    get() = getKey()!!
 
 /** Returns the value of the entry */
 val <K,V> JEntry<K,V>.value : V
-    get() = getValue().sure()
+    get() = getValue()!!
 
 /**
  * Returns the value for the given key or returns the result of the defaultValue function if there was no entry for the given key

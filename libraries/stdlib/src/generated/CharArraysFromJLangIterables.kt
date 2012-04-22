@@ -172,7 +172,7 @@ public inline fun <K> CharArray.groupByTo(result: Map<K, List<Char>>, toKey: (Ch
 public inline fun CharArray.makeString(separator: String = ", ", prefix: String = "", postfix: String = "", limit: Int = -1, truncated: String = "..."): String {
     val buffer = StringBuilder()
     appendString(buffer, separator, prefix, postfix, limit, truncated)
-    return buffer.toString().sure()
+    return buffer.toString()!!
 }
 
 /** Returns a list containing the first elements that satisfy the given *predicate* */

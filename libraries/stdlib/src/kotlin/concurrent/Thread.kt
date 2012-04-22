@@ -3,10 +3,10 @@ package kotlin.concurrent
 import java.util.concurrent.Executor
 
 inline val currentThread : Thread
-    get() = Thread.currentThread().sure()
+    get() = Thread.currentThread()!!
 
 inline var Thread.name : String
-    get() = getName().sure()
+    get() = getName()!!
     set(name: String) { setName(name) }
 
 inline var Thread.daemon : Boolean

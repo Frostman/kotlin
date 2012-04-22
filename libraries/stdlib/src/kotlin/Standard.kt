@@ -28,7 +28,7 @@ public fun <erased T> java.util.Enumeration<T>.iterator(): Iterator<T> = object:
     override val hasNext: Boolean
     get() = hasMoreElements()
 
-    public override fun next() : T = nextElement().sure()
+    public override fun next() : T = nextElement()!!
 }
 
 /*

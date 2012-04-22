@@ -172,7 +172,7 @@ public inline fun <K> FloatArray.groupByTo(result: Map<K, List<Float>>, toKey: (
 public inline fun FloatArray.makeString(separator: String = ", ", prefix: String = "", postfix: String = "", limit: Int = -1, truncated: String = "..."): String {
     val buffer = StringBuilder()
     appendString(buffer, separator, prefix, postfix, limit, truncated)
-    return buffer.toString().sure()
+    return buffer.toString()!!
 }
 
 /** Returns a list containing the first elements that satisfy the given *predicate* */

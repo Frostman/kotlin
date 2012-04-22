@@ -46,7 +46,7 @@ get() {
             i++
         }
     }
-    return buffer.toString().sure()
+    return buffer.toString()!!
 }
 set(value) {
     // lets remove all the previous text nodes first
@@ -166,9 +166,9 @@ fun Document?.get(selector: String): List<Element> {
             val id = selector.substring(1)
             val element = this?.getElementById(id)
             return if (element != null)
-                Collections.singletonList(element).sure() as List<Element>
+                Collections.singletonList(element)!! as List<Element>
             else
-                Collections.EMPTY_LIST.sure() as List<Element>
+                Collections.EMPTY_LIST!! as List<Element>
         } else {
             //  assume its a vanilla element name
             elements(selector)
@@ -187,9 +187,9 @@ fun Element.get(selector: String): List<Element> {
     } else if (selector.startsWith("#")) {
         val element = this.getOwnerDocument()?.getElementById(selector.substring(1))
         return if (element != null)
-            Collections.singletonList(element).sure() as List<Element>
+            Collections.singletonList(element)!! as List<Element>
         else
-            Collections.EMPTY_LIST.sure() as List<Element>
+            Collections.EMPTY_LIST!! as List<Element>
     } else {
         //  assume its a vanilla element name
         elements(selector)
@@ -374,7 +374,7 @@ inline fun Element.plusAssign(text: String?): Element = this.addText(text)
  * Creates a new element which can be configured via a function
  */
 fun Document.createElement(name: String, init: Element.()-> Unit): Element {
-    val elem = this.createElement(name).sure()
+    val elem = this.createElement(name)!!
     elem.init()
     return elem
 }
@@ -383,7 +383,7 @@ fun Document.createElement(name: String, init: Element.()-> Unit): Element {
  * Creates a new element to an element which has an owner Document which can be configured via a function
  */
 fun Element.createElement(name: String, doc: Document? = null, init: Element.()-> Unit): Element {
-    val elem = ownerDocument(doc).createElement(name).sure()
+    val elem = ownerDocument(doc).createElement(name)!!
     elem.init()
     return elem
 }
