@@ -76,10 +76,10 @@
     </target>
 
     <macrodef name="execute_update">
-        <attribute name="teamcity" default="http://teamcity.jetbrains.com"/>
+        <attribute name="teamcity" default="http://192.168.19.238:8111"/>
 
         <!-- IDEA CE 11.1 branch 117 -->
-        <attribute name="teamcity.build" default="bt365"/>
+        <attribute name="teamcity.build" default="bt4"/>
 
         <sequential>
             <property name="core" value="ideaSDK/core"/>
