@@ -18,28 +18,13 @@ package org.jetbrains.jet.lang.psi.stubs;
 
 import com.intellij.psi.stubs.NamedStub;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-import org.jetbrains.jet.lang.psi.JetNamedFunction;
+import org.jetbrains.jet.lang.psi.JetObjectDeclaration;
 import org.jetbrains.jet.lang.resolve.name.FqName;
 
 /**
  * @author Nikolay Krasko
  */
-public interface PsiJetFunctionStub extends NamedStub<JetNamedFunction> {
-    @Nullable
-    FqName getTopFQName();
-
-    /**
-     * Is function defined in directly in package.
-     * @return
-     */
-    boolean isTopLevel();
-
-    /**
-     * Does function extends some type.
-     */
-    boolean isExtension();
-
+public interface PsiJetObjectStub extends NamedStub<JetObjectDeclaration> {
     @NotNull
-    String[] getAnnotations();
+    FqName getFQName();
 }
