@@ -16,10 +16,12 @@
 
 package org.jetbrains.k2js.config;
 
+import com.google.common.collect.Lists;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.lang.psi.JetFile;
+import org.jetbrains.jet.lang.resolve.BindingContext;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -51,7 +53,7 @@ public abstract class Config {
     }
 
     @NotNull
-    public static final List<String> LIB_FILE_NAMES = Arrays.asList(
+    public static final List<String> LIB_FILES_WITH_DECLARATIONS = Arrays.asList(
             "/core/annotations.kt",
             "/jquery/common.kt",
             "/jquery/ui.kt",
@@ -63,8 +65,6 @@ public abstract class Config {
             "/core/core.kt",
             "/core/math.kt",
             "/core/json.kt",
-            "/raphael/raphael.kt",
-            "/stdlib/JUMaps.kt",
             "/stdlib/browser.kt",
             "/core/dom.kt",
             "/dom/domcore.kt",
@@ -74,6 +74,18 @@ public abstract class Config {
             "/junit/core.kt",
             "/qunit/core.kt"
     );
+
+    @NotNull
+    public static final List<String> LIB_FILES_WITH_CODE = Arrays.asList(
+            "/stdlib/JUMaps.kt"
+    );
+
+    @NotNull
+    public static final List<String> LIB_FILE_NAMES = Lists.newArrayList();
+    static {
+        LIB_FILE_NAMES.addAll(LIB_FILES_WITH_DECLARATIONS);
+        LIB_FILE_NAMES.addAll(LIB_FILES_WITH_CODE);
+    }
 
     /**
      * the library files which depend on the STDLIB files to be able to compile
@@ -143,5 +155,10 @@ public abstract class Config {
             libFiles = generateLibFiles();
         }
         return libFiles;
+    }
+
+    @Nullable
+    public BindingContext getLibraryBindingContext() {
+        return null;
     }
 }
