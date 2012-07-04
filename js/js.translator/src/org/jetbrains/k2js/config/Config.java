@@ -24,6 +24,7 @@ import org.jetbrains.jet.lang.psi.JetFile;
 import org.jetbrains.jet.lang.resolve.BindingContext;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
@@ -36,7 +37,7 @@ public abstract class Config {
 
     @NotNull
     public static Config getEmptyConfig(@NotNull Project project, @NotNull EcmaVersion ecmaVersion) {
-        return new Config(project, ecmaVersion) {
+        return new Config(project, "main", ecmaVersion) {
             @NotNull
             @Override
             protected List<JetFile> generateLibFiles() {
@@ -76,9 +77,7 @@ public abstract class Config {
     );
 
     @NotNull
-    public static final List<String> LIB_FILES_WITH_CODE = Arrays.asList(
-            "/stdlib/JUMaps.kt"
-    );
+    public static final List<String> LIB_FILES_WITH_CODE = Lists.newArrayList();
 
     @NotNull
     public static final List<String> LIB_FILE_NAMES = Lists.newArrayList();
@@ -94,7 +93,7 @@ public abstract class Config {
     public static final List<String> LIB_FILE_NAMES_DEPENDENT_ON_STDLIB = Arrays.asList(
             "/stdlib/dom.kt",
             "/stdlib/jutil.kt",
-            "/stdlib/JUMaps.kt",
+            //"/stdlib/JUMaps.kt",
             "/stdlib/test.kt",
             "/core/stringDefs.kt",
             "/core/strings.kt"
@@ -136,9 +135,13 @@ public abstract class Config {
     @NotNull
     private final EcmaVersion target;
 
-    public Config(@NotNull Project project, @NotNull EcmaVersion ecmaVersion) {
+    @NotNull
+    private final String moduleId;
+
+    public Config(@NotNull Project project, @NotNull String moduleId, @NotNull EcmaVersion ecmaVersion) {
         this.project = project;
         this.target = ecmaVersion;
+        this.moduleId = moduleId;
     }
 
     @NotNull
@@ -149,6 +152,11 @@ public abstract class Config {
     @NotNull
     public EcmaVersion getTarget() {
         return target;
+    }
+
+    @NotNull
+    public String getModuleId() {
+        return moduleId;
     }
 
     @NotNull
@@ -165,5 +173,13 @@ public abstract class Config {
     @Nullable
     public BindingContext getLibraryBindingContext() {
         return null;
+    }
+
+    @NotNull
+    public static Collection<JetFile> withJsLibAdded(@NotNull Collection<JetFile> files, @NotNull Config config) {
+        Collection<JetFile> allFiles = Lists.newArrayList();
+        allFiles.addAll(files);
+        allFiles.addAll(config.getLibFiles());
+        return allFiles;
     }
 }

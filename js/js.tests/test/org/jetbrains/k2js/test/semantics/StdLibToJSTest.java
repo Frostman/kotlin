@@ -20,13 +20,10 @@ import org.jetbrains.k2js.config.EcmaVersion;
 
 /**
  */
-public class StdLibToJSTest extends StdLibTestSupport {
+public class StdLibToJSTest extends StdLibTestBase {
 
     public void testCompileJavaScriptFiles() throws Exception {
-        generateJavaScriptFiles(EcmaVersion.all(),
-                                "libraries/stdlib/src",
-                                "kotlin/Preconditions.kt",
-                                "kotlin/dom/Dom.kt",
-                                "kotlin/support/AbstractIterator.kt");
+        performStdLibTest(EcmaVersion.all(),
+                          "libraries/stdlib/src");
     }
 }

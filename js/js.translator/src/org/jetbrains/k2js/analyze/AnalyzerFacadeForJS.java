@@ -18,7 +18,6 @@ package org.jetbrains.k2js.analyze;
 
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
-import com.google.common.collect.Sets;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiFile;
 import org.jetbrains.annotations.NotNull;
@@ -26,27 +25,15 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.analyzer.AnalyzeExhaust;
 import org.jetbrains.jet.analyzer.AnalyzerFacadeForEverything;
 import org.jetbrains.jet.di.InjectorForTopDownAnalyzerForJs;
-import org.jetbrains.jet.lang.DefaultModuleConfiguration;
-import org.jetbrains.jet.lang.ModuleConfiguration;
 import org.jetbrains.jet.lang.descriptors.ModuleDescriptor;
-import org.jetbrains.jet.lang.descriptors.NamespaceDescriptor;
 import org.jetbrains.jet.lang.psi.JetFile;
-import org.jetbrains.jet.lang.psi.JetImportDirective;
-import org.jetbrains.jet.lang.psi.JetPsiFactory;
 import org.jetbrains.jet.lang.resolve.*;
-import org.jetbrains.jet.lang.resolve.name.FqName;
 import org.jetbrains.jet.lang.resolve.name.Name;
-import org.jetbrains.jet.lang.resolve.scopes.JetScope;
-import org.jetbrains.jet.lang.resolve.scopes.WritableScope;
-import org.jetbrains.jet.lang.types.lang.JetStandardClasses;
 import org.jetbrains.k2js.config.Config;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
-
-import static org.jetbrains.jet.lang.resolve.DescriptorUtils.isRootNamespace;
 
 /**
  * @author Pavel Talanov
@@ -60,7 +47,7 @@ public final class AnalyzerFacadeForJS {
     public static BindingContext analyzeFilesAndCheckErrors(@NotNull List<JetFile> files,
             @NotNull Config config) {
         BindingContext bindingContext = analyzeFiles(files, Predicates.<PsiFile>alwaysTrue(), config).getBindingContext();
-        checkForErrors(withJsLibAdded(files, config), bindingContext);
+        checkForErrors(Config.withJsLibAdded(files, config), bindingContext);
         return bindingContext;
     }
 
@@ -104,7 +91,7 @@ public final class AnalyzerFacadeForJS {
         try {
             Collection<JetFile> allFiles = libraryBindingContext != null ?
                                            files :
-                                           withJsLibAdded(files, config);
+                                           Config.withJsLibAdded(files, config);
             injector.getTopDownAnalyzer().analyzeFiles(allFiles, Collections.<AnalyzerScriptParameter>emptyList());
             BodiesResolveContext bodiesResolveContext = storeContextForBodiesResolve ?
                                                         new CachedBodiesResolveContext(injector.getTopDownAnalysisContext()) :
@@ -135,14 +122,6 @@ public final class AnalyzerFacadeForJS {
     }
 
     @NotNull
-    public static Collection<JetFile> withJsLibAdded(@NotNull Collection<JetFile> files, @NotNull Config config) {
-        Set<JetFile> allFiles = Sets.newHashSet();
-        allFiles.addAll(files);
-        allFiles.addAll(config.getLibFiles());
-        return allFiles;
-    }
-
-    @NotNull
     private static Predicate<PsiFile> notLibFiles(@NotNull final List<JetFile> jsLibFiles) {
         return new Predicate<PsiFile>() {
             @Override
@@ -152,44 +131,5 @@ public final class AnalyzerFacadeForJS {
                 return notLibFile;
             }
         };
-    }
-
-    private static final class JsConfiguration implements ModuleConfiguration {
-
-        @NotNull
-        private final Project project;
-        @Nullable
-        private final BindingContext contextToBaseOn;
-
-        private JsConfiguration(@NotNull Project project, @Nullable BindingContext contextToBaseOn) {
-            this.project = project;
-            this.contextToBaseOn = contextToBaseOn;
-        }
-
-        @Override
-        public void addDefaultImports(@NotNull Collection<JetImportDirective> directives) {
-            //TODO: these things should not be hard-coded like that
-            directives.add(JetPsiFactory.createImportDirective(project, new ImportPath("js.*")));
-            directives.add(JetPsiFactory.createImportDirective(project, new ImportPath("java.lang.*")));
-            directives.add(JetPsiFactory.createImportDirective(project, new ImportPath(JetStandardClasses.STANDARD_CLASSES_FQNAME, true)));
-            directives.add(JetPsiFactory.createImportDirective(project, new ImportPath("kotlin.*")));
-        }
-
-        @Override
-        public void extendNamespaceScope(@NotNull BindingTrace trace, @NotNull NamespaceDescriptor namespaceDescriptor,
-                @NotNull WritableScope namespaceMemberScope) {
-            DefaultModuleConfiguration.createStandardConfiguration(project, true)
-                    .extendNamespaceScope(trace, namespaceDescriptor, namespaceMemberScope);
-            if (contextToBaseOn == null) {
-                return;
-            }
-            if (!isRootNamespace(namespaceDescriptor)) {
-                return;
-            }
-            NamespaceDescriptor rootNamespaceScope = contextToBaseOn.get(BindingContext.FQNAME_TO_NAMESPACE_DESCRIPTOR, FqName.ROOT);
-            assert rootNamespaceScope != null;
-            JetScope memberScope = rootNamespaceScope.getMemberScope();
-            namespaceMemberScope.importScope(memberScope);
-        }
     }
 }

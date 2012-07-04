@@ -19,6 +19,9 @@ package org.jetbrains.k2js.translate.context;
 import com.google.dart.compiler.backend.js.ast.*;
 import com.google.dart.compiler.util.AstUtil;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.jet.lang.descriptors.DeclarationDescriptor;
+import org.jetbrains.jet.lang.descriptors.NamespaceDescriptor;
+import org.jetbrains.jet.lang.resolve.DescriptorUtils;
 
 import static org.jetbrains.k2js.translate.utils.JsAstUtils.setQualifier;
 
@@ -32,14 +35,13 @@ public final class Namer {
     private static final String INITIALIZE_METHOD_NAME = "initialize";
     private static final String CLASS_OBJECT_NAME = "createClass";
     private static final String TRAIT_OBJECT_NAME = "createTrait";
-    private static final String NAMESPACE_OBJECT_NAME = "createNamespace";
     private static final String OBJECT_OBJECT_NAME = "createObject";
     private static final String SETTER_PREFIX = "set_";
     private static final String GETTER_PREFIX = "get_";
     private static final String BACKING_FIELD_PREFIX = "$";
     private static final String SUPER_METHOD_NAME = "super_init";
     private static final String KOTLIN_OBJECT_NAME = "Kotlin";
-    private static final String ROOT_NAMESPACE = "Root";
+    private static final String ROOT_NAMESPACE = "_";
     private static final String RECEIVER_PARAMETER_NAME = "receiver";
     private static final String CLASSES_OBJECT_NAME = "classes";
     private static final String THROW_NPE_FUN_NAME = "throwNPE";
@@ -112,7 +114,7 @@ public final class Namer {
     @NotNull
     private final JsName traitName;
     @NotNull
-    private final JsName namespaceName;
+    private final JsExpression definePackage;
     @NotNull
     private final JsName objectName;
 
@@ -122,17 +124,24 @@ public final class Namer {
     @NotNull
     private final JsPropertyInitializer writablePropertyDescriptorField;
 
+    @NotNull
+    private final JsPropertyInitializer enumerablePropertyDescriptorField;
+
     private Namer(@NotNull JsScope rootScope) {
         kotlinName = rootScope.declareName(KOTLIN_OBJECT_NAME);
         kotlinScope = new JsScope(rootScope, "Kotlin standard object");
         traitName = kotlinScope.declareName(TRAIT_OBJECT_NAME);
-        namespaceName = kotlinScope.declareName(NAMESPACE_OBJECT_NAME);
+
+        definePackage = kotlin("definePackage");
+
         className = kotlinScope.declareName(CLASS_OBJECT_NAME);
         objectName = kotlinScope.declareName(OBJECT_OBJECT_NAME);
 
         isTypeName = kotlinScope.declareName("isType");
 
-        writablePropertyDescriptorField = new JsPropertyInitializer(new JsNameRef("writable"), rootScope.getProgram().getTrueLiteral());
+        JsProgram program = rootScope.getProgram();
+        writablePropertyDescriptorField = new JsPropertyInitializer(program.getStringLiteral("writable"), program.getTrueLiteral());
+        enumerablePropertyDescriptorField = new JsPropertyInitializer(program.getStringLiteral("enumerable"), program.getTrueLiteral());
     }
 
     @NotNull
@@ -146,8 +155,8 @@ public final class Namer {
     }
 
     @NotNull
-    public JsExpression namespaceCreationMethodReference() {
-        return kotlin(namespaceName);
+    public JsExpression packageDefinitionMethodReference() {
+        return definePackage;
     }
 
     @NotNull
@@ -164,14 +173,17 @@ public final class Namer {
 
     @NotNull
     private JsExpression kotlin(@NotNull JsName name) {
-        JsNameRef reference = name.makeRef();
-        reference.setQualifier(kotlinName.makeRef());
-        return reference;
+        return kotlin(name.makeRef());
+    }
+
+    @NotNull
+    public JsExpression kotlin(@NotNull String name) {
+        return kotlin(kotlinScope.declareName(name));
     }
 
     @NotNull
     private JsExpression kotlin(@NotNull JsExpression reference) {
-        setQualifier(reference, kotlinName.makeRef());
+        setQualifier(reference, kotlinObject());
         return reference;
     }
 
@@ -191,7 +203,22 @@ public final class Namer {
     }
 
     @NotNull
+    public JsPropertyInitializer enumerablePropertyDescriptorField() {
+        return enumerablePropertyDescriptorField;
+    }
+
+    @NotNull
         /*package*/ JsScope getKotlinScope() {
         return kotlinScope;
+    }
+
+    @NotNull
+    static String generateNamespaceName(DeclarationDescriptor descriptor) {
+        if (DescriptorUtils.isRootNamespace((NamespaceDescriptor) descriptor)) {
+            return getRootNamespaceName();
+        }
+        else {
+            return descriptor.getName().getName();
+        }
     }
 }

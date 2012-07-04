@@ -19,16 +19,14 @@ package org.jetbrains.k2js.translate.general;
 import com.google.dart.compiler.backend.js.JsNamer;
 import com.google.dart.compiler.backend.js.JsPrettyNamer;
 import com.google.dart.compiler.backend.js.ast.*;
-import com.intellij.openapi.util.text.StringUtil;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.jet.lang.descriptors.ClassDescriptor;
-import org.jetbrains.jet.lang.descriptors.DeclarationDescriptor;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.lang.descriptors.FunctionDescriptor;
 import org.jetbrains.jet.lang.descriptors.NamespaceDescriptor;
 import org.jetbrains.jet.lang.psi.*;
 import org.jetbrains.jet.lang.resolve.BindingContext;
 import org.jetbrains.jet.lang.types.lang.JetStandardLibrary;
-import org.jetbrains.k2js.config.EcmaVersion;
+import org.jetbrains.k2js.config.Config;
 import org.jetbrains.k2js.facade.MainCallParameters;
 import org.jetbrains.k2js.facade.exceptions.MainFunctionNotFoundException;
 import org.jetbrains.k2js.facade.exceptions.TranslationException;
@@ -36,6 +34,7 @@ import org.jetbrains.k2js.facade.exceptions.TranslationInternalException;
 import org.jetbrains.k2js.facade.exceptions.UnsupportedFeatureException;
 import org.jetbrains.k2js.translate.context.StaticContext;
 import org.jetbrains.k2js.translate.context.TranslationContext;
+import org.jetbrains.k2js.translate.declaration.ClassAliasingMap;
 import org.jetbrains.k2js.translate.declaration.ClassTranslator;
 import org.jetbrains.k2js.translate.declaration.NamespaceDeclarationTranslator;
 import org.jetbrains.k2js.translate.expression.ExpressionVisitor;
@@ -45,14 +44,15 @@ import org.jetbrains.k2js.translate.expression.WhenTranslator;
 import org.jetbrains.k2js.translate.initializer.ClassInitializerTranslator;
 import org.jetbrains.k2js.translate.initializer.NamespaceInitializerTranslator;
 import org.jetbrains.k2js.translate.reference.CallBuilder;
+import org.jetbrains.k2js.translate.test.TestGenerator;
 import org.jetbrains.k2js.translate.utils.JsAstUtils;
+import org.jetbrains.k2js.translate.utils.TranslationUtils;
 import org.jetbrains.k2js.translate.utils.dangerous.DangerousData;
 import org.jetbrains.k2js.translate.utils.dangerous.DangerousTranslator;
 
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 import static org.jetbrains.jet.plugin.JetMainDetector.getMainFunction;
 import static org.jetbrains.k2js.translate.utils.BindingUtils.getFunctionDescriptor;
@@ -77,15 +77,15 @@ public final class Translation {
     }
 
     @NotNull
-    public static List<JsStatement> translateFiles(@NotNull List<JetFile> files, @NotNull TranslationContext context) {
+    public static List<JsStatement> translateFiles(@NotNull Collection<JetFile> files, @NotNull TranslationContext context) {
         return NamespaceDeclarationTranslator.translateFiles(files, context);
     }
 
     @NotNull
     public static JsExpression translateClassDeclaration(@NotNull JetClass classDeclaration,
-            @NotNull Map<JsName, JsName> aliasingMap,
+            @NotNull ClassAliasingMap classAliasingMap,
             @NotNull TranslationContext context) {
-        return ClassTranslator.generateClassCreationExpression(classDeclaration, aliasingMap, context);
+        return ClassTranslator.generateClassCreationExpression(classDeclaration, classAliasingMap, context);
     }
 
     @NotNull
@@ -147,11 +147,11 @@ public final class Translation {
 
     @NotNull
     public static JsProgram generateAst(@NotNull BindingContext bindingContext,
-            @NotNull List<JetFile> files, @NotNull MainCallParameters mainCallParameters,
-            @NotNull EcmaVersion ecmaVersion, List<String> rawStatements)
+            @NotNull Collection<JetFile> files, @NotNull MainCallParameters mainCallParameters,
+            @NotNull Config config)
             throws TranslationException {
         try {
-            return doGenerateAst(bindingContext, files, mainCallParameters, ecmaVersion, rawStatements);
+            return doGenerateAst(bindingContext, files, mainCallParameters, config);
         }
         catch (UnsupportedOperationException e) {
             throw new UnsupportedFeatureException("Unsupported feature used.", e);
@@ -162,36 +162,46 @@ public final class Translation {
     }
 
     @NotNull
-    private static JsProgram doGenerateAst(@NotNull BindingContext bindingContext, @NotNull List<JetFile> files,
+    private static JsProgram doGenerateAst(@NotNull BindingContext bindingContext, @NotNull Collection<JetFile> files,
             @NotNull MainCallParameters mainCallParameters,
-            @NotNull EcmaVersion ecmaVersion, List<String> rawStatements) throws MainFunctionNotFoundException {
+            @NotNull Config config) throws MainFunctionNotFoundException {
         //TODO: move some of the code somewhere
         JetStandardLibrary standardLibrary = JetStandardLibrary.getInstance();
-        StaticContext staticContext = StaticContext.generateStaticContext(standardLibrary, bindingContext, ecmaVersion);
+        StaticContext staticContext = StaticContext.generateStaticContext(standardLibrary, bindingContext, config.getTarget());
         JsProgram program = staticContext.getProgram();
         JsBlock block = program.getGlobalBlock();
 
         JsFunction rootFunction = JsAstUtils.createPackage(block.getStatements(), program.getScope());
-        List<JsStatement> statements = rootFunction.getBody().getStatements();
+        JsBlock rootBlock = rootFunction.getBody();
+        List<JsStatement> statements = rootBlock.getStatements();
         statements.add(program.getStringLiteral("use strict").makeStmt());
 
         TranslationContext context = TranslationContext.rootContext(staticContext);
         statements.addAll(translateFiles(files, context));
+        TranslationUtils.defineModule(context, statements, config.getModuleId());
+
         if (mainCallParameters.shouldBeGenerated()) {
-            statements.add(generateCallToMain(context, files, mainCallParameters.arguments()));
+            JsStatement statement = generateCallToMain(context, files, mainCallParameters.arguments());
+            if (statement != null) {
+                statements.add(statement);
+            }
         }
-        generateTestCalls(context, files, block, rawStatements);
-        JsNamer namer = new JsPrettyNamer();
-        namer.exec(context.program());
+        TestGenerator.generateTestCalls(context, files, rootBlock);
+        performSimpleNameMangling(context.program());
         return context.program();
     }
 
-    @NotNull
-    private static JsStatement generateCallToMain(@NotNull TranslationContext context, @NotNull List<JetFile> files,
+    private static void performSimpleNameMangling(@NotNull JsProgram program) {
+        JsNamer namer = new JsPrettyNamer();
+        namer.exec(program);
+    }
+
+    @Nullable
+    private static JsStatement generateCallToMain(@NotNull TranslationContext context, @NotNull Collection<JetFile> files,
             @NotNull List<String> arguments) throws MainFunctionNotFoundException {
         JetNamedFunction mainFunction = getMainFunction(files);
         if (mainFunction == null) {
-            throw new MainFunctionNotFoundException("Main function was not found. Please check compiler arguments");
+            return null;
         }
         JsInvocation translatedCall = generateInvocation(context, mainFunction);
         setArguments(context, arguments, translatedCall);
@@ -213,46 +223,4 @@ public final class Translation {
         arrayLiteral.getExpressions().addAll(toStringLiteralList(arguments, context.program()));
         JsAstUtils.setArguments(translatedCall, Collections.<JsExpression>singletonList(arrayLiteral));
     }
-
-    @NotNull
-    private static void generateTestCalls(@NotNull TranslationContext context,
-            @NotNull List<JetFile> files,
-            @NotNull JsBlock block,
-            List<String> rawStatements) {
-        ClassDescriptor lastClassDescriptor = null;
-        List<JetNamedFunction> functions = JetTestFunctionDetector.findTestFunctions(context.bindingContext(), files);
-        for (JetNamedFunction function : functions) {
-            FunctionDescriptor functionDescriptor = getFunctionDescriptor(context.bindingContext(), function);
-            String funName = functionDescriptor.getName().getName();
-            DeclarationDescriptor containingDeclaration = functionDescriptor.getContainingDeclaration();
-            if (containingDeclaration instanceof ClassDescriptor) {
-                ClassDescriptor classDescriptor = (ClassDescriptor) containingDeclaration;
-                String className = getQualifiedName(classDescriptor);
-                rawStatements.add("QUnit.test( \"" + className + "." + funName + "()\" , function() {");
-                String prefix = "    var ";
-                rawStatements.add(prefix + "_testCase = new Kotlin.defs." + className + "();");
-                //rawStatements.add("    expect(0);");
-                rawStatements.add("    _testCase." + funName + "();");
-            } else {
-                rawStatements.add("QUnit.test( \"" + funName + "()\", function() {");
-                //rawStatements.add("    expect(0);");
-                rawStatements.add("    " + funName + "();");
-            }
-            rawStatements.add("});");
-        }
-    }
-
-    public static String  getQualifiedName(ClassDescriptor classDescriptor) {
-            List<String> parts = new ArrayList<String>();
-            DeclarationDescriptor current = classDescriptor;
-            while (current != null) {
-                String name = current.getName().getName();
-                if (name.startsWith("<")) break;
-                parts.add(name);
-                current = current.getContainingDeclaration();
-            }
-            Collections.reverse(parts);
-            return StringUtil.join(parts, ".");
-        }
-
 }
