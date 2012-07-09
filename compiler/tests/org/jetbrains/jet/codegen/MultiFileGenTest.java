@@ -16,15 +16,13 @@
 
 package org.jetbrains.jet.codegen;
 
-import org.jetbrains.jet.lang.resolve.java.CompilerSpecialMode;
-
-import java.lang.reflect.Method;
+import org.jetbrains.jet.ConfigurationKind;
 
 public class MultiFileGenTest extends CodegenTestCase {
     @Override
     protected void setUp() throws Exception {
         super.setUp();
-        createEnvironmentWithMockJdkAndIdeaAnnotations(CompilerSpecialMode.JDK_HEADERS);
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
     }
 
     public void testSimple() {

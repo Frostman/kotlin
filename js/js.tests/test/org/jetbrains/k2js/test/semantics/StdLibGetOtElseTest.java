@@ -14,33 +14,17 @@
  * limitations under the License.
  */
 
-package org.jetbrains.jet.lang.resolve.java;
+package org.jetbrains.k2js.test.semantics;
+
+import junit.framework.Test;
 
 /**
-* @author Stepan Koltsov
-*/
-public enum CompilerSpecialMode {
-    REGULAR,
-    BUILTINS,
-    JDK_HEADERS,
-    STDLIB,
-    IDEA,
-    JS,
-    ;
-
-    public boolean includeJdkAnnotations() {
-        return this == REGULAR || this == STDLIB || this == IDEA;
-    }
-
-    public boolean includeKotlinRuntime() {
-        return this == REGULAR;
-    }
-
-    public boolean includeJdk() {
-        return this != IDEA;
-    }
-
-    public boolean isStubs() {
-        return this == BUILTINS || this == JDK_HEADERS;
+ * @author Pavel Talanov
+ */
+//NOTE: well, it has tests
+@SuppressWarnings("JUnitTestCaseWithNoTests")
+public class StdLibGetOtElseTest extends JsUnitTestBase {
+    public static Test suite() throws Exception {
+        return createTestSuiteForFile("libraries/stdlib/test/GetOrElseTest.kt");
     }
 }
