@@ -22,29 +22,38 @@ import com.intellij.openapi.editor.impl.DocumentImpl;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.psi.PsiElement;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.jet.ConfigurationKind;
 import org.jetbrains.jet.JetTestUtils;
+import org.jetbrains.jet.cli.jvm.compiler.JetCoreEnvironment;
 import org.jetbrains.jet.di.InjectorForTopDownAnalyzer;
 import org.jetbrains.jet.lang.descriptors.*;
 import org.jetbrains.jet.lang.psi.*;
 import org.jetbrains.jet.lang.resolve.name.FqName;
 import org.jetbrains.jet.lang.resolve.name.Name;
 import org.jetbrains.jet.resolve.DescriptorRenderer;
+import org.jetbrains.jet.test.generator.SimpleTestClassModel;
+import org.jetbrains.jet.test.generator.TestGenerator;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
 /**
  * @author abreslav
  */
-public abstract class AbstractLazyResolveDescriptorRendererTest extends AbstractLazyResolveTest {
+public abstract class AbstractLazyResolveDescriptorRendererTest extends KotlinTestWithEnvironment {
 
+    @Override
+    protected JetCoreEnvironment createEnvironment() {
+        return createEnvironmentWithMockJdk(ConfigurationKind.ALL);
+    }
 
     protected void doTest(@NotNull String testFile) throws IOException {
 
-        InjectorForTopDownAnalyzer injectorForTopDownAnalyzer = getEagerInjectorForTopDownAnalyzer(regularEnvironment);
+        InjectorForTopDownAnalyzer injectorForTopDownAnalyzer = LazyResolveTestUtil.getEagerInjectorForTopDownAnalyzer(getEnvironment());
 
         JetFile psiFile = JetPsiFactory.createFile(getProject(), FileUtil.loadFile(new File(testFile), true));
         Collection<JetFile> files = Lists.newArrayList(psiFile);
@@ -135,5 +144,26 @@ public abstract class AbstractLazyResolveDescriptorRendererTest extends Abstract
 
         Document document = new DocumentImpl(psiFile.getText());
         assertEquals(JetTestUtils.getLastCommentedLines(document), renderedDescriptors.toString());
+    }
+
+    public static void main(String[] args) throws IOException {
+        String extension = "kt";
+        new TestGenerator(
+            "compiler/tests/",
+            AbstractLazyResolveDescriptorRendererTest.class.getPackage().getName(),
+            "LazyResolveDescriptorRendererTestGenerated",
+            AbstractLazyResolveDescriptorRendererTest.class,
+            Arrays.asList(
+                    new SimpleTestClassModel(new File("compiler/testData/renderer"),
+                                             true,
+                                             extension,
+                                             "doTest"),
+                    new SimpleTestClassModel(new File("compiler/testData/lazyResolve/descriptorRenderer"),
+                                             true,
+                                             extension,
+                                             "doTest")
+            ),
+            AbstractLazyResolveDescriptorRendererTest.class
+        ).generateAndSave();
     }
 }
