@@ -26,10 +26,8 @@ import org.jetbrains.jet.lang.resolve.calls.ResolvedCall;
 import org.jetbrains.jet.lang.resolve.scopes.receivers.ReceiverDescriptor;
 import org.jetbrains.k2js.translate.context.TranslationContext;
 import org.jetbrains.k2js.translate.general.Translation;
-import org.jetbrains.k2js.translate.intrinsic.Intrinsic;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import static com.google.dart.compiler.util.AstUtil.newAssignment;
@@ -84,17 +82,6 @@ public final class TranslationUtils {
         JsBinaryOperation isNull = equality(expressionToCheck, nullLiteral);
         JsBinaryOperation isUndefined = equality(expressionToCheck, UNDEFINED_LITERAL);
         return or(isNull, isUndefined);
-    }
-
-    @NotNull
-    public static JsBinaryOperation nullCheck(@NotNull TranslationContext context,
-            @NotNull JsExpression expressionToCheck, boolean shouldBeNull) {
-        if (shouldBeNull) {
-            return isNullCheck(context, expressionToCheck);
-        }
-        else {
-            return notNullCheck(context, expressionToCheck);
-        }
     }
 
     @NotNull
@@ -205,40 +192,14 @@ public final class TranslationUtils {
         return Translation.translateAsExpression(rightExpression, context);
     }
 
-    public static boolean isIntrinsicOperation(@NotNull TranslationContext context,
+    public static boolean hasCorrespondingFunctionIntrinsic(@NotNull TranslationContext context,
             @NotNull JetOperationExpression expression) {
-        FunctionDescriptor operationDescriptor =
-                BindingUtils.getFunctionDescriptorForOperationExpression(context.bindingContext(), expression);
+        FunctionDescriptor operationDescriptor = getFunctionDescriptorForOperationExpression(context.bindingContext(), expression);
 
         if (operationDescriptor == null) return true;
-        if (context.intrinsics().isIntrinsic(operationDescriptor)) return true;
+        if (context.intrinsics().getFunctionIntrinsics().getIntrinsic(operationDescriptor).exists()) return true;
 
         return false;
-    }
-
-    @NotNull
-    public static JsNameRef getMethodReferenceForOverloadedOperation(@NotNull TranslationContext context,
-            @NotNull JetOperationExpression expression) {
-        FunctionDescriptor overloadedOperationDescriptor = getFunctionDescriptorForOperationExpression
-                (context.bindingContext(), expression);
-        assert overloadedOperationDescriptor != null;
-        JsNameRef overloadedOperationReference = context.getNameForDescriptor(overloadedOperationDescriptor).makeRef();
-        assert overloadedOperationReference != null;
-        return overloadedOperationReference;
-    }
-
-    @NotNull
-    public static JsNumberLiteral zeroLiteral(@NotNull TranslationContext context) {
-        return context.program().getNumberLiteral(0);
-    }
-
-    @NotNull
-    public static JsExpression applyIntrinsicToBinaryExpression(@NotNull TranslationContext context,
-            @NotNull Intrinsic intrinsic,
-            @NotNull JetBinaryExpression binaryExpression) {
-        JsExpression left = translateLeftExpression(context, binaryExpression);
-        JsExpression right = translateRightExpression(context, binaryExpression);
-        return intrinsic.apply(left, Arrays.asList(right), context);
     }
 
     @Nullable
@@ -250,10 +211,6 @@ public final class TranslationUtils {
         }
         DeclarationDescriptor expectedThisDescriptor = getDeclarationDescriptorForReceiver(thisObject);
         return getThisObject(context, expectedThisDescriptor);
-    }
-
-    public static boolean isNullLiteral(@NotNull TranslationContext context, @NotNull JsExpression expression) {
-        return expression.equals(context.program().getNullLiteral());
     }
 
     public static void defineModule(@NotNull TranslationContext context, @NotNull List<JsStatement> statements,

@@ -159,7 +159,9 @@
       <extendWordSelectionHandler implementation="org.jetbrains.jet.plugin.editor.wordSelection.JetStatementGroupSelectioner"/>
       <extendWordSelectionHandler implementation="org.jetbrains.jet.plugin.editor.wordSelection.JetCodeBlockSelectioner"/>
       <extendWordSelectionHandler implementation="org.jetbrains.jet.plugin.editor.wordSelection.JetListSelectioner"/>
+      <typedHandler implementation="org.jetbrains.jet.plugin.editor.KotlinTypedHandler" />
 
+      <copyPastePostProcessor implementation="org.jetbrains.jet.plugin.conversion.copy.JavaCopyPastePostProcessor"/>
       <lang.documentationProvider language="JAVA" implementationClass="org.jetbrains.jet.plugin.JetQuickDocumentationProvider" order="first"/>
       <documentationProvider implementation="org.jetbrains.jet.plugin.JetQuickDocumentationProvider"/>
       <configurationType implementation="org.jetbrains.jet.plugin.run.JetRunConfigurationType"/>
@@ -195,6 +197,7 @@
       <psi.clsDecompiledFileProvider implementation="org.jetbrains.jet.plugin.libraries.JetClsFileDecompiledPsiFileProvider" />
 
       <editorNotificationProvider implementation="org.jetbrains.jet.plugin.quickfix.ConfigureKotlinLibraryNotificationProvider"/>
+      <editorNotificationProvider implementation="org.jetbrains.jet.plugin.quickfix.AbsentJdkAnnotationsNotifications"/>
 
       <psi.treeChangePreprocessor implementation="org.jetbrains.jet.asJava.JetCodeBlockModificationListener"/>
 
@@ -207,6 +210,11 @@
                   anchor="right"
                   icon="/org/jetbrains/jet/plugin/icons/kotlin_13.png"
               />
+
+      <applicationService serviceInterface="org.jetbrains.jet.plugin.editor.JetEditorOptions"
+                          serviceImplementation="org.jetbrains.jet.plugin.editor.JetEditorOptions"/>
+      <exportable serviceInterface="org.jetbrains.jet.plugin.editor.JetEditorOptions"/>
+      <editorAppearanceConfigurable instance="org.jetbrains.jet.plugin.editor.JetSettingEditorConfigurable"/>
 
       <intentionAction>
         <className>org.jetbrains.jet.plugin.intentions.SpecifyTypeExplicitlyAction</className>

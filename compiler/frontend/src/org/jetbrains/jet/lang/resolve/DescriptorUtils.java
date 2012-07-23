@@ -23,7 +23,6 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.lang.descriptors.*;
 import org.jetbrains.jet.lang.psi.JetElement;
 import org.jetbrains.jet.lang.psi.JetFunction;
-import org.jetbrains.jet.lang.psi.JetSecondaryConstructor;
 import org.jetbrains.jet.lang.resolve.name.FqName;
 import org.jetbrains.jet.lang.resolve.name.FqNameUnsafe;
 import org.jetbrains.jet.lang.resolve.name.Name;
@@ -31,10 +30,7 @@ import org.jetbrains.jet.lang.resolve.scopes.receivers.ReceiverDescriptor;
 import org.jetbrains.jet.lang.types.*;
 import org.jetbrains.jet.lang.types.lang.JetStandardClasses;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static org.jetbrains.jet.lang.resolve.scopes.receivers.ReceiverDescriptor.NO_RECEIVER;
 
@@ -227,9 +223,6 @@ public class DescriptorUtils {
                 expectedType = TypeUtils.NO_EXPECTED_TYPE;
             }
         }
-        else if (function instanceof JetSecondaryConstructor) {
-            expectedType = JetStandardClasses.getUnitType();
-        }
         else {
             expectedType = descriptor.getReturnType();
         }
@@ -307,6 +300,48 @@ public class DescriptorUtils {
                     }
                 }
             }
+        }
+        return false;
+    }
+
+    @NotNull
+    public static List<ClassDescriptor> getSuperclassDescriptors(@NotNull ClassDescriptor classDescriptor) {
+        Collection<? extends JetType> superclassTypes = classDescriptor.getTypeConstructor().getSupertypes();
+        List<ClassDescriptor> superClassDescriptors = new ArrayList<ClassDescriptor>();
+        for (JetType type : superclassTypes) {
+            ClassDescriptor result = getClassDescriptorForType(type);
+            if (isNotAny(result)) {
+                superClassDescriptors.add(result);
+            }
+        }
+        return superClassDescriptors;
+    }
+
+    @NotNull
+    public static ClassDescriptor getClassDescriptorForType(@NotNull JetType type) {
+        DeclarationDescriptor superClassDescriptor =
+            type.getConstructor().getDeclarationDescriptor();
+        assert superClassDescriptor instanceof ClassDescriptor
+            : "Superclass descriptor of a type should be of type ClassDescriptor";
+        return (ClassDescriptor)superClassDescriptor;
+    }
+
+    public static boolean isNotAny(@NotNull DeclarationDescriptor superClassDescriptor) {
+        return !superClassDescriptor.equals(JetStandardClasses.getAny());
+    }
+
+    public static boolean inStaticContext(@NotNull DeclarationDescriptor descriptor) {
+        DeclarationDescriptor containingDeclaration = descriptor.getContainingDeclaration();
+        if (containingDeclaration instanceof NamespaceDescriptor) {
+            return true;
+        }
+        if (containingDeclaration instanceof ClassDescriptor) {
+            ClassDescriptor classDescriptor = (ClassDescriptor) containingDeclaration;
+
+            if (classDescriptor.getKind() == ClassKind.OBJECT) {
+                return inStaticContext(classDescriptor.getContainingDeclaration());
+            }
+
         }
         return false;
     }

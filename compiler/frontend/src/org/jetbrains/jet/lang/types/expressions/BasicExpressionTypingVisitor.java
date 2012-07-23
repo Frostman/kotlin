@@ -28,9 +28,7 @@ import org.jetbrains.jet.lang.descriptors.*;
 import org.jetbrains.jet.lang.diagnostics.Errors;
 import org.jetbrains.jet.lang.psi.*;
 import org.jetbrains.jet.lang.resolve.*;
-import org.jetbrains.jet.lang.resolve.calls.CallMaker;
-import org.jetbrains.jet.lang.resolve.calls.OverloadResolutionResults;
-import org.jetbrains.jet.lang.resolve.calls.OverloadResolutionResultsUtil;
+import org.jetbrains.jet.lang.resolve.calls.*;
 import org.jetbrains.jet.lang.resolve.calls.autocasts.DataFlowInfo;
 import org.jetbrains.jet.lang.resolve.calls.autocasts.DataFlowValue;
 import org.jetbrains.jet.lang.resolve.calls.autocasts.DataFlowValueFactory;
@@ -613,6 +611,14 @@ public class BasicExpressionTypingVisitor extends ExpressionTypingVisitor {
         if (!results.isNothing()) {
             checkSuper(receiver, results, context.trace, callExpression);
             result[0] = true;
+            if (results.isSingleResult()) {
+                ResolvedCall<FunctionDescriptor> resultingCall = results.getResultingCall();
+                if (resultingCall instanceof ResolvedCallWithTrace) {
+                    if (((ResolvedCallWithTrace)resultingCall).getStatus() == ResolutionStatus.TYPE_INFERENCE_ERROR) {
+                        return null;
+                    }
+                }
+            }
             return results.isSingleResult() ? results.getResultingDescriptor() : null;
         }
         result[0] = false;
@@ -733,7 +739,8 @@ public class BasicExpressionTypingVisitor extends ExpressionTypingVisitor {
                 for (JetValueArgument argument : argumentList.getArguments()) {
                     JetExpression expression = argument.getArgumentExpression();
                     if (expression != null) {
-                        dataFlowInfo = dataFlowInfo.and(facade.getTypeInfo(expression, context.replaceDataFlowInfo(dataFlowInfo)).getDataFlowInfo());
+                        dataFlowInfo = dataFlowInfo.and(facade.getTypeInfo(expression, context.replaceExpectedType(NO_EXPECTED_TYPE).
+                                replaceDataFlowInfo(dataFlowInfo)).getDataFlowInfo());
                     }
                 }
             }
@@ -987,7 +994,7 @@ public class BasicExpressionTypingVisitor extends ExpressionTypingVisitor {
                 checkInExpression(expression, expression.getOperationReference(), expression.getLeft(), expression.getRight(), context);
                 result = booleanType;
             }
-            else if (operationType == JetTokens.ANDAND || operationType == JetTokens.OROR) {
+            else if (OperatorConventions.BOOLEAN_OPERATIONS.containsKey(operationType)) {
                 JetType leftType = facade.getTypeInfo(left, context.replaceScope(context.scope)).getType();
                 WritableScopeImpl leftScope = newWritableScopeImpl(context, "Left scope of && or ||");
                 DataFlowInfo flowInfoLeft = DataFlowUtils.extractDataFlowInfoFromCondition(left, operationType == JetTokens.ANDAND, leftScope, context);  // TODO: This gets computed twice: here and in extractDataFlowInfoFromCondition() for the whole condition

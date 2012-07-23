@@ -22,7 +22,7 @@ public final class EqualsTest extends AbstractExpressionTest {
         super("equals/");
     }
 
-    public void TODO_testCustomEqualsMethodOnAny() throws Exception {
+    public void testCustomEqualsMethodOnAny() throws Exception {
         fooBoxTest();
     }
 
@@ -34,7 +34,15 @@ public final class EqualsTest extends AbstractExpressionTest {
         fooBoxTest();
     }
 
+    public void testExplicitEqualsMethodForPrimitives() throws Exception {
+        fooBoxTest();
+    }
+
     public void testStringsEqual() throws Exception {
+        fooBoxTest();
+    }
+
+    public void testKt2370() throws Exception {
         fooBoxTest();
     }
 }

@@ -93,6 +93,7 @@ public class DeclarationResolver {
         resolveFunctionAndPropertyHeaders();
         importsResolver.processMembersImports(rootScope);
         checkRedeclarationsInNamespaces();
+        checkClassObjectInnerClassNames();
     }
 
 
@@ -103,9 +104,6 @@ public class DeclarationResolver {
             MutableClassDescriptor classDescriptor = entry.getValue();
 
             processPrimaryConstructor(classDescriptor, jetClass);
-            for (JetSecondaryConstructor jetConstructor : jetClass.getSecondaryConstructors()) {
-                processSecondaryConstructor(classDescriptor, jetConstructor);
-            }
         }
     }
 
@@ -250,20 +248,6 @@ public class DeclarationResolver {
         }
     }
 
-    private void processSecondaryConstructor(MutableClassDescriptor classDescriptor, JetSecondaryConstructor constructor) {
-        trace.report(SECONDARY_CONSTRUCTORS_ARE_NOT_SUPPORTED.on(constructor));
-        if (classDescriptor.getKind() == ClassKind.TRAIT) {
-            trace.report(CONSTRUCTOR_IN_TRAIT.on(constructor.getNameNode().getPsi()));
-        }
-        ConstructorDescriptor constructorDescriptor = descriptorResolver.resolveSecondaryConstructorDescriptor(
-                classDescriptor.getScopeForMemberResolution(),
-                classDescriptor,
-                constructor, trace);
-        classDescriptor.addConstructor(constructorDescriptor, trace);
-        context.getConstructors().put(constructor, constructorDescriptor);
-        context.getDeclaringScopes().put(constructor, classDescriptor.getScopeForMemberLookup());
-    }
-
     private void checkRedeclarationsInNamespaces() {
         for (NamespaceDescriptorImpl descriptor : context.getNamespaceDescriptors().values()) {
             Multimap<Name, DeclarationDescriptor> simpleNameDescriptors = descriptor.getMemberScope().getDeclaredDescriptorsAccessibleBySimpleName();
@@ -313,5 +297,27 @@ public class DeclarationResolver {
             declarations = Collections.singletonList(BindingContextUtils.descriptorToDeclaration(trace.getBindingContext(), declarationDescriptor));
         }
         return declarations;
+    }
+
+    private void checkClassObjectInnerClassNames() {
+        for (MutableClassDescriptor classDescriptor : context.getClasses().values()) {
+            MutableClassDescriptorLite classObj = classDescriptor.getClassObjectDescriptor();
+            if (classObj == null) {
+                continue;
+            }
+
+            Collection<ClassDescriptor> myInnerClasses = classDescriptor.getInnerClasses();
+            Collection<ClassDescriptor> classObjInnerClasses = classObj.getInnerClasses();
+
+            for (ClassDescriptor myInnerClass : myInnerClasses) {
+                for (ClassDescriptor classObjInnerClass : classObjInnerClasses) {
+                    if (myInnerClass.getName().equals(classObjInnerClass.getName())) {
+                        trace.report(REDECLARATION.on(BindingContextUtils.classDescriptorToDeclaration(trace.getBindingContext(), myInnerClass), myInnerClass.getName().getName()));
+                        trace.report(REDECLARATION.on(BindingContextUtils.classDescriptorToDeclaration(trace.getBindingContext(), classObjInnerClass), classObjInnerClass.getName().getName()));
+                        break;
+                    }
+                }
+            }
+        }
     }
 }

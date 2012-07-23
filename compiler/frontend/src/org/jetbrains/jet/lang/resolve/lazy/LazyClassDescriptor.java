@@ -19,7 +19,9 @@ package org.jetbrains.jet.lang.resolve.lazy;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Collections2;
+import com.google.common.collect.Lists;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.lang.descriptors.*;
 import org.jetbrains.jet.lang.descriptors.annotations.AnnotationDescriptor;
 import org.jetbrains.jet.lang.psi.*;
@@ -38,10 +40,7 @@ import org.jetbrains.jet.lang.types.JetType;
 import org.jetbrains.jet.lang.types.TypeConstructor;
 import org.jetbrains.jet.lang.types.TypeUtils;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 /**
  * @author abreslav
@@ -98,9 +97,15 @@ public class LazyClassDescriptor extends ClassDescriptorBase implements ClassDes
         this.typeConstructor = new LazyClassTypeConstructor();
 
         this.kind = classLikeInfo.getClassKind();
-        Modality defaultModality = kind == ClassKind.TRAIT ? Modality.ABSTRACT : Modality.FINAL;
+        if (kind == ClassKind.OBJECT) {
+            this.modality = Modality.FINAL;
+        }
+        else {
+            Modality defaultModality = kind == ClassKind.TRAIT ? Modality.ABSTRACT : Modality.FINAL;
+            JetModifierList modifierList = classLikeInfo.getModifierList();
+            this.modality = DescriptorResolver.resolveModalityFromModifiers(modifierList, defaultModality);
+        }
         JetModifierList modifierList = classLikeInfo.getModifierList();
-        this.modality = DescriptorResolver.resolveModalityFromModifiers(modifierList, defaultModality);
         this.visibility = DescriptorResolver.resolveVisibilityFromModifiers(modifierList, Visibilities.INTERNAL);
     }
 
@@ -132,8 +137,8 @@ public class LazyClassDescriptor extends ClassDescriptorBase implements ClassDes
     public JetScope getScopeForMemberDeclarationResolution() {
         if (scopeForMemberDeclarationResolution == null) {
             WritableScopeImpl scope = new WritableScopeImpl(
-                    getScopeForClassHeaderResolution(), this, RedeclarationHandler.DO_NOTHING, "Member Declaration Resolution");
-            scope.importScope(getScopeForMemberLookup());
+                    getScopeForMemberLookup(), this, RedeclarationHandler.DO_NOTHING, "Member Declaration Resolution");
+            scope.importScope(getScopeForClassHeaderResolution());
 
             scope.changeLockLevel(WritableScope.LockLevel.READING);
             scopeForMemberDeclarationResolution = scope;
@@ -205,29 +210,36 @@ public class LazyClassDescriptor extends ClassDescriptorBase implements ClassDes
         if (!classObjectDescriptorResolved) {
             JetClassObject classObject = declarationProvider.getOwnerInfo().getClassObject();
 
-            boolean isEnum = getKind() == ClassKind.ENUM_CLASS;
-            JetClassLikeInfo classObjectInfo = null;
-            if (classObject != null) {
-                JetObjectDeclaration objectDeclaration = classObject.getObjectDeclaration();
-                if (objectDeclaration != null) {
-                    classObjectInfo = JetClassInfoUtil.createClassLikeInfo(objectDeclaration);
-                }
-            }
-            else {
-                if (isEnum) {
-                    // Enum classes always have class objects, and enum constants are their members
-                    classObjectInfo = onlyEnumEntries(originalClassInfo);
-                }
-            }
-
-
+            JetClassLikeInfo classObjectInfo = getClassObjectInfo(classObject);
             if (classObjectInfo != null) {
-                classObjectDescriptor = new LazyClassDescriptor(resolveSession, this, isEnum ? Name.special("<class-object-for-" + getName() + ">") : JetPsiUtil.NO_NAME_PROVIDED,
-                                                                classObjectInfo);
+                Name classObjectName = getKind() == ClassKind.ENUM_CLASS
+                                       ? Name.special("<class-object-for-" + getName() + ">")
+                                       : JetPsiUtil.NO_NAME_PROVIDED;
+                classObjectDescriptor = new LazyClassDescriptor(resolveSession, this, classObjectName, classObjectInfo);
             }
             classObjectDescriptorResolved = true;
         }
         return classObjectDescriptor;
+    }
+
+    @Nullable
+    private JetClassLikeInfo getClassObjectInfo(JetClassObject classObject) {
+        if (classObject != null) {
+            if (!DescriptorUtils.inStaticContext(this)) {
+                return null;
+            }
+            JetObjectDeclaration objectDeclaration = classObject.getObjectDeclaration();
+            if (objectDeclaration != null) {
+                return JetClassInfoUtil.createClassLikeInfo(objectDeclaration);
+            }
+        }
+        else {
+            if (getKind() == ClassKind.ENUM_CLASS) {
+                // Enum classes always have class objects, and enum constants are their members
+                return onlyEnumEntries(originalClassInfo);
+            }
+        }
+        return null;
     }
 
     @NotNull
@@ -321,11 +333,36 @@ public class LazyClassDescriptor extends ClassDescriptorBase implements ClassDes
                                 .resolveSupertypes(getScopeForClassHeaderResolution(),
                                                    classOrObject,
                                                    resolveSession.getTrace());
-                        this.supertypes = Collections2.filter(allSupertypes, VALID_SUPERTYPE);
+                        List<JetType> validSupertypes = Lists.newArrayList(Collections2.filter(allSupertypes, VALID_SUPERTYPE));
+                        this.supertypes = validSupertypes;
+                        findAndDisconnectLoopsInTypeHierarchy(validSupertypes);
                     }
                 }
             }
             return supertypes;
+        }
+
+        private void findAndDisconnectLoopsInTypeHierarchy(List<JetType> supertypes) {
+            for (Iterator<JetType> iterator = supertypes.iterator(); iterator.hasNext(); ) {
+                JetType supertype = iterator.next();
+                if (isReachable(supertype.getConstructor(), this, new HashSet<TypeConstructor>())) {
+                    iterator.remove();
+                }
+            }
+        }
+
+        private boolean isReachable(TypeConstructor from, TypeConstructor to, Set<TypeConstructor> visited) {
+            if (!visited.add(from)) return false;
+            for (JetType supertype : from.getSupertypes()) {
+                TypeConstructor supertypeConstructor = supertype.getConstructor();
+                if (supertypeConstructor == to) {
+                    return true;
+                }
+                if (isReachable(supertypeConstructor, to, visited)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         @Override
@@ -369,6 +406,12 @@ public class LazyClassDescriptor extends ClassDescriptorBase implements ClassDes
             @NotNull
             @Override
             public List<? extends JetParameter> getPrimaryConstructorParameters() {
+                return Collections.emptyList();
+            }
+
+            @NotNull
+            @Override
+            public List<JetTypeParameter> getTypeParameters() {
                 return Collections.emptyList();
             }
         };

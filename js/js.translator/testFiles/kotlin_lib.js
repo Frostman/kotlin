@@ -23,6 +23,7 @@ var kotlin = {set:function (receiver, key, value) {
     "use strict";
 
     Kotlin.equals = function (obj1, obj2) {
+        if ((obj1 === null)|| (obj1 === undefined)) return obj2 === null;
         if (typeof obj1 == "object") {
             if (obj1.equals !== undefined) {
                 return obj1.equals(obj2);
@@ -41,8 +42,12 @@ var kotlin = {set:function (receiver, key, value) {
         return answer;
     };
 
-    Kotlin.upto = function (from, limit, reversed) {
-        return Kotlin.$new(Kotlin.NumberRange)(from, limit - from, reversed).iterator();
+    Kotlin.intUpto = function (from, limit) {
+        return Kotlin.$new(Kotlin.NumberRange)(from, limit - from + 1, false);
+    };
+
+    Kotlin.intDownto = function (from, limit) {
+        return Kotlin.$new(Kotlin.NumberRange)(from, from - limit + 1, true);
     };
 
     Kotlin.modules = {};
@@ -62,15 +67,23 @@ var kotlin = {set:function (receiver, key, value) {
         throw Kotlin.$new(Kotlin.Exceptions.NullPointerException)();
     };
 
-    function throwAbstractFunctionInvocationError() {
-        throw new TypeError("Function is abstract");
+    function throwAbstractFunctionInvocationError(funName) {
+        return function() {
+            var message;
+            if (funName !== undefined) {
+                message = "Function " + funName + " is abstract";
+            } else {
+                message = "Function is abstract";
+            }
+            throw new TypeError(message);
+        };
     }
 
     Kotlin.Iterator = Kotlin.$createClass({
         initialize: function () {
         },
-        next: throwAbstractFunctionInvocationError,
-        get_hasNext: throwAbstractFunctionInvocationError
+        next: throwAbstractFunctionInvocationError("Iterator#next"),
+        get_hasNext: throwAbstractFunctionInvocationError("Iterator#get_hasNext")
     });
 
     var ArrayIterator = Kotlin.$createClass(Kotlin.Iterator, {
@@ -83,6 +96,9 @@ var kotlin = {set:function (receiver, key, value) {
             return this.array[this.index++];
         },
         get_hasNext: function () {
+            return this.index < this.size;
+        },
+        hasNext: function () {
             return this.index < this.size;
         }
     });
@@ -101,10 +117,7 @@ var kotlin = {set:function (receiver, key, value) {
         }
     });
 
-    Kotlin.AbstractList = Kotlin.$createClass({
-        iterator: function () {
-            return Kotlin.$new(ListIterator)(this);
-        },
+    Kotlin.AbstractCollection = Kotlin.$createClass({
         isEmpty: function () {
             return this.size() == 0;
         },
@@ -114,17 +127,9 @@ var kotlin = {set:function (receiver, key, value) {
                 this.add(it.next());
             }
         },
-        remove: function (o) {
-            var index = this.indexOf(o);
-            if (index != -1) {
-                this.removeAt(index);
-            }
-        },
-        contains: function (o) {
-            return this.indexOf(o) != -1;
-        },
         equals: function (o) {
-            if (this.$size === o.$size) {
+            if (o === null || o === undefined) return false;
+            if (this.size() === o.size()) {
                 var iter1 = this.iterator();
                 var iter2 = o.iterator();
                 while (true) {
@@ -158,6 +163,23 @@ var kotlin = {set:function (receiver, key, value) {
         }
     });
 
+    Kotlin.AbstractList = Kotlin.$createClass(Kotlin.AbstractCollection, {
+        iterator: function () {
+            return Kotlin.$new(ListIterator)(this);
+        },
+        isEmpty: function () {
+            return this.size() == 0;
+        },
+        remove: function (o) {
+            var index = this.indexOf(o);
+            if (index != -1) {
+                this.removeAt(index);
+            }
+        },
+        contains: function (o) {
+            return this.indexOf(o) != -1;
+        }
+    });
     Kotlin.ArrayList = Kotlin.$createClass(Kotlin.AbstractList, {
         initialize: function () {
             this.array = [];
@@ -211,19 +233,19 @@ var kotlin = {set:function (receiver, key, value) {
     Kotlin.Runnable = Kotlin.$createClass({
         initialize: function () {
         },
-        run: throwAbstractFunctionInvocationError
+        run: throwAbstractFunctionInvocationError("Runnable#run")
     });
 
     Kotlin.Comparable = Kotlin.$createClass({
         initialize: function () {
         },
-        compareTo: throwAbstractFunctionInvocationError
+        compareTo: throwAbstractFunctionInvocationError("Comparable#compareTo")
     });
 
     Kotlin.Appendable = Kotlin.$createClass({
         initialize: function () {
         },
-        append: throwAbstractFunctionInvocationError
+        append: throwAbstractFunctionInvocationError("Appendable#append")
     });
 
     Kotlin.parseInt = function (str) {
@@ -357,7 +379,7 @@ var kotlin = {set:function (receiver, key, value) {
     Kotlin.Comparator = Kotlin.$createClass({
         initialize: function () {
         },
-        compare: throwAbstractFunctionInvocationError
+        compare: throwAbstractFunctionInvocationError("Comparator#compare")
     });
 
     var ComparatorImpl = Kotlin.$createClass(Kotlin.Comparator, {
@@ -889,6 +911,42 @@ var kotlin = {set:function (receiver, key, value) {
                 var h = new HashSet(hashingFunction, equalityFunction);
                 h.addAll(hashTable.keys());
                 return h;
+            };
+
+            this.equals = function (o) {
+                if (o === null || o === undefined) return false;
+                if (this.size() === o.size()) {
+                    var iter1 = this.iterator();
+                    var iter2 = o.iterator();
+                    while (true) {
+                        var hn1 = iter1.get_hasNext();
+                        var hn2 = iter2.get_hasNext();
+                        if (hn1 != hn2) return false;
+                        if (!hn2)
+                            return true;
+                        else {
+                            var o1 = iter1.next();
+                            var o2 = iter2.next();
+                            if (!Kotlin.equals(o1, o2)) return false;
+                        }
+                    }
+                }
+                return false;
+            };
+
+            this.toString = function() {
+                var builder = "[";
+                var iter = this.iterator();
+                var first = true;
+                while (iter.get_hasNext()) {
+                    if (first)
+                        first = false;
+                    else
+                        builder += ", ";
+                    builder += iter.next();
+                }
+                builder += "]";
+                return builder;
             };
 
             this.intersection = function (hashSet) {

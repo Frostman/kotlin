@@ -27,11 +27,12 @@ import org.jetbrains.jet.lang.resolve.calls.autocasts.DataFlowInfo;
 import org.jetbrains.jet.lang.resolve.calls.autocasts.DataFlowValue;
 import org.jetbrains.jet.lang.resolve.calls.autocasts.DataFlowValueFactory;
 import org.jetbrains.jet.lang.resolve.scopes.WritableScope;
-import org.jetbrains.jet.lang.types.JetTypeInfo;
-import org.jetbrains.jet.lang.types.lang.JetStandardClasses;
+import org.jetbrains.jet.lang.types.ErrorUtils;
 import org.jetbrains.jet.lang.types.JetType;
+import org.jetbrains.jet.lang.types.JetTypeInfo;
 import org.jetbrains.jet.lang.types.TypeUtils;
 import org.jetbrains.jet.lang.types.checker.JetTypeChecker;
+import org.jetbrains.jet.lang.types.lang.JetStandardClasses;
 import org.jetbrains.jet.lexer.JetTokens;
 
 import java.util.List;
@@ -70,7 +71,7 @@ public class DataFlowUtils {
             @Override
             public void visitBinaryExpression(JetBinaryExpression expression) {
                 IElementType operationToken = expression.getOperationToken();
-                if (operationToken == JetTokens.ANDAND || operationToken == JetTokens.OROR) {
+                if (OperatorConventions.BOOLEAN_OPERATIONS.containsKey(operationToken)) {
                     WritableScope actualScopeToExtend;
                     if (operationToken == JetTokens.ANDAND) {
                         actualScopeToExtend = conditionValue ? scopeToExtend : null;
@@ -187,7 +188,7 @@ public class DataFlowUtils {
 
     @Nullable
     public static JetType checkStatementType(@NotNull JetExpression expression, @NotNull ExpressionTypingContext context) {
-        if (context.expectedType != TypeUtils.NO_EXPECTED_TYPE && !JetStandardClasses.isUnit(context.expectedType)) {
+        if (context.expectedType != TypeUtils.NO_EXPECTED_TYPE && !JetStandardClasses.isUnit(context.expectedType) && !ErrorUtils.isErrorType(context.expectedType)) {
             context.trace.report(EXPECTED_TYPE_MISMATCH.on(expression, context.expectedType));
             return null;
         }

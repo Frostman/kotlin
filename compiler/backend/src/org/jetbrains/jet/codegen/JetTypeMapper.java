@@ -710,7 +710,7 @@ public class JetTypeMapper {
 
         if (kind == OwnerKind.TRAIT_IMPL) {
             ClassDescriptor containingDeclaration = (ClassDescriptor) f.getContainingDeclaration();
-            JetType jetType = TraitImplBodyCodegen.getSuperClass(containingDeclaration, bindingContext);
+            JetType jetType = TraitImplBodyCodegen.getSuperClass(containingDeclaration);
             Type type = mapType(jetType, MapTypeMode.VALUE);
             if(type.getInternalName().equals("java/lang/Object")) {
                 jetType = containingDeclaration.getDefaultType();
@@ -1052,7 +1052,8 @@ public class JetTypeMapper {
                 || className.getFqName().getFqName().equals("java.lang.String")
                 || className.getFqName().getFqName().equals("java.lang.CharSequence")
                 || className.getFqName().getFqName().equals("java.lang.Object")
-                || className.getFqName().getFqName().equals("java.lang.Number");
+                || className.getFqName().getFqName().equals("java.lang.Number")
+                || className.getFqName().getFqName().equals("java.lang.Comparable");
     }
 
     public boolean isGenericsArray(JetType type) {

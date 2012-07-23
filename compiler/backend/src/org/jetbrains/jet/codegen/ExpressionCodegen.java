@@ -2848,15 +2848,19 @@ The "returned" value of try expression with no finally is either the last expres
         }
         else if (pattern instanceof JetExpressionPattern) {
             if (expressionToMatch != null) {
-                final Type subjectType = expressionToMatch.type;
+                Type subjectType = expressionToMatch.type;
                 expressionToMatch.dupReceiver(v);
                 expressionToMatch.put(subjectType, v);
                 JetExpression condExpression = ((JetExpressionPattern) pattern).getExpression();
                 boolean patternIsNullable = false;
                 JetType condJetType = bindingContext.get(BindingContext.EXPRESSION_TYPE, condExpression);
                 Type condType;
-                if (isNumberPrimitive(subjectType)) {
+                if (isNumberPrimitive(subjectType) || subjectType.getSort() == Type.BOOLEAN) {
                     condType = asmType(condJetType);
+                    if (!(isNumberPrimitive(condType) || condType.getSort() == Type.BOOLEAN)) {
+                        subjectType = JetTypeMapper.boxType(subjectType);
+                        expressionToMatch.coerce(subjectType, v);
+                    }
                 }
                 else {
                     condType = TYPE_OBJECT;
