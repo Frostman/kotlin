@@ -19,19 +19,19 @@ package org.jetbrains.jet.cli.jvm.compiler;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.io.FileUtil;
-import com.intellij.psi.JavaPsiFacade;
-import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.util.Processor;
 import jet.modules.AllModules;
 import jet.modules.Module;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.cli.common.messages.MessageCollector;
+import org.jetbrains.jet.cli.common.util.CompilerPathUtil;
 import org.jetbrains.jet.cli.jvm.JVMConfigurationKeys;
 import org.jetbrains.jet.codegen.BuiltinToJavaTypesMapping;
 import org.jetbrains.jet.codegen.ClassFileFactory;
 import org.jetbrains.jet.codegen.GeneratedClassLoader;
 import org.jetbrains.jet.codegen.GenerationState;
+import org.jetbrains.jet.config.CommonConfigurationKeys;
 import org.jetbrains.jet.config.CompilerConfiguration;
 import org.jetbrains.jet.lang.BuiltinsScopeExtensionMode;
 import org.jetbrains.jet.lang.resolve.java.JvmAbi;
@@ -81,58 +81,6 @@ public class CompileEnvironmentUtil {
         return null;
     }
 
-    public static void ensureKotlinRuntime(JetCoreEnvironment env) {
-        if (JavaPsiFacade.getInstance(env.getProject()).findClass("jet.JetObject", GlobalSearchScope.allScope(env.getProject())) == null) {
-            // TODO: prepend
-            File kotlin = PathUtil.getDefaultRuntimePath();
-            if (kotlin == null || !kotlin.exists()) {
-                kotlin = getUnpackedRuntimePath();
-                if (kotlin == null) kotlin = getRuntimeJarPath();
-            }
-            if (kotlin == null) {
-                throw new IllegalStateException("kotlin runtime not found");
-            }
-            env.addToClasspath(kotlin);
-        }
-    }
-
-
-    public static void ensureJdkRuntime(JetCoreEnvironment env) {
-        if (JavaPsiFacade.getInstance(env.getProject()).findClass("java.lang.Object", GlobalSearchScope.allScope(env.getProject())) ==
-            null) {
-            // TODO: prepend
-            env.addToClasspath(findRtJar());
-        }
-    }
-
-    public static File findRtJar() {
-        String javaHome = System.getProperty("java.home");
-        if ("jre".equals(new File(javaHome).getName())) {
-            javaHome = new File(javaHome).getParent();
-        }
-
-        File rtJar = findRtJar(javaHome);
-
-        if (rtJar == null || !rtJar.exists()) {
-            throw new CompileEnvironmentException("No JDK rt.jar found under " + javaHome);
-        }
-
-        return rtJar;
-    }
-
-    private static File findRtJar(String javaHome) {
-        File rtJar = new File(javaHome, "jre/lib/rt.jar");
-        if (rtJar.exists()) {
-            return rtJar;
-        }
-
-        File classesJar = new File(new File(javaHome).getParentFile().getAbsolutePath(), "Classes/classes.jar");
-        if (classesJar.exists()) {
-            return classesJar;
-        }
-        return null;
-    }
-
     @NotNull
     public static List<Module> loadModuleScript(String moduleScriptFile, MessageCollector messageCollector) {
         Disposable disposable = new Disposable() {
@@ -142,15 +90,17 @@ public class CompileEnvironmentUtil {
             }
         };
         CompilerConfiguration configuration = new CompilerConfiguration();
-        configuration.putUserData(JVMConfigurationKeys.CLASSPATH_KEY, new File[]{
-                PathUtil.findRtJar(),
-                PathUtil.getDefaultRuntimePath()
-        });
-        configuration.putUserData(JVMConfigurationKeys.ANNOTATIONS_PATH_KEY, new File[]{
-                PathUtil.getJdkAnnotationsPath()
-        });
+        File defaultRuntimePath = CompilerPathUtil.getRuntimePath();
+        if (defaultRuntimePath != null) {
+            configuration.add(JVMConfigurationKeys.CLASSPATH_KEY, defaultRuntimePath);
+        }
+        configuration.add(JVMConfigurationKeys.CLASSPATH_KEY, PathUtil.findRtJar());
+        File jdkAnnotationsPath = CompilerPathUtil.getJdkAnnotationsPath();
+        if (jdkAnnotationsPath != null) {
+            configuration.add(JVMConfigurationKeys.ANNOTATIONS_PATH_KEY, jdkAnnotationsPath);
+        }
+        configuration.add(CommonConfigurationKeys.SOURCE_ROOTS_KEY, moduleScriptFile);
         JetCoreEnvironment scriptEnvironment = JetCoreEnvironment.createCoreEnvironmentForJVM(disposable, configuration);
-        scriptEnvironment.addSources(moduleScriptFile);
 
         GenerationState generationState = KotlinToJVMBytecodeCompiler
                 .analyzeAndGenerate(new K2JVMCompileEnvironmentConfiguration(scriptEnvironment, messageCollector, false,
@@ -175,7 +125,7 @@ public class CompileEnvironmentUtil {
     }
 
     private static List<Module> runDefineModules(String moduleFile, ClassFileFactory factory) {
-        File stdlibJar = PathUtil.getDefaultRuntimePath();
+        File stdlibJar = CompilerPathUtil.getRuntimePath();
         GeneratedClassLoader loader;
         if (stdlibJar != null) {
             try {
@@ -297,50 +247,6 @@ public class CompileEnvironmentUtil {
             catch (IOException e) {
                 throw new CompileEnvironmentException(e);
             }
-        }
-    }
-
-    /**
-     * Add path specified to the compilation environment.
-     *
-     * @param environment compilation environment to add to
-     * @param paths       paths to add
-     */
-    public static void addToClasspath(JetCoreEnvironment environment, File... paths) {
-        for (File path : paths) {
-            if (!path.exists()) {
-                throw new CompileEnvironmentException("'" + path + "' does not exist");
-            }
-            environment.addToClasspath(path);
-        }
-    }
-
-    /**
-     * Add path specified to the compilation environment.
-     *
-     * @param environment compilation environment to add to
-     * @param paths       paths to add
-     */
-    public static void addToClasspath(JetCoreEnvironment environment, String... paths) {
-        for (String path : paths) {
-            addToClasspath(environment, new File(path));
-        }
-    }
-
-    public static void addSourcesFromModuleToEnvironment(@NotNull JetCoreEnvironment environment,
-            @NotNull Module module,
-            @NotNull File moduleDirectory) {
-        for (String sourceFile : module.getSourceFiles()) {
-            File source = new File(sourceFile);
-            if (!source.isAbsolute()) {
-                source = new File(moduleDirectory, sourceFile);
-            }
-
-            if (!source.exists()) {
-                throw new CompileEnvironmentException("'" + source + "' does not exist");
-            }
-
-            environment.addSources(source.getPath());
         }
     }
 }

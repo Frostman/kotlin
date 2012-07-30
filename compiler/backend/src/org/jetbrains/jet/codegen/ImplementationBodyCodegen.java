@@ -37,16 +37,16 @@ import org.jetbrains.jet.lang.resolve.java.JvmStdlibNames;
 import org.jetbrains.jet.lang.types.JetType;
 import org.jetbrains.jet.lexer.JetTokens;
 import org.jetbrains.jet.utils.BitSetUtils;
-import org.objectweb.asm.AnnotationVisitor;
-import org.objectweb.asm.MethodVisitor;
-import org.objectweb.asm.Type;
-import org.objectweb.asm.commons.InstructionAdapter;
-import org.objectweb.asm.commons.Method;
+import org.jetbrains.asm4.AnnotationVisitor;
+import org.jetbrains.asm4.MethodVisitor;
+import org.jetbrains.asm4.Type;
+import org.jetbrains.asm4.commons.InstructionAdapter;
+import org.jetbrains.asm4.commons.Method;
 
 import java.util.*;
 
 import static org.jetbrains.jet.codegen.JetTypeMapper.TYPE_OBJECT;
-import static org.objectweb.asm.Opcodes.*;
+import static org.jetbrains.asm4.Opcodes.*;
 
 /**
  * @author max
@@ -823,11 +823,13 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
                     codegen.generateThisOrOuter(descriptor);    // ??? wouldn't it be a good idea to put it?
 
                     Type[] argTypes = function.getArgumentTypes();
+                    List<Type> originalArgTypes = jvmSignature.getValueParameterTypes();
                     InstructionAdapter iv = new InstructionAdapter(mv);
                     iv.load(0, JetTypeMapper.TYPE_OBJECT);
                     for (int i = 0, reg = 1; i < argTypes.length; i++) {
                         Type argType = argTypes[i];
                         iv.load(reg, argType);
+                        StackValue.coerce(argType, originalArgTypes.get(i), iv);
                         //noinspection AssignmentToForLoopParameter
                         reg += argType.getSize();
                     }

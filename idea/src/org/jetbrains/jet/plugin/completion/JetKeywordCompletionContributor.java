@@ -23,12 +23,15 @@ import com.intellij.codeInsight.CommentUtil;
 import com.intellij.codeInsight.completion.*;
 import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.codeInsight.lookup.LookupElementBuilder;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.patterns.ElementPattern;
 import com.intellij.patterns.PlatformPatterns;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiWhiteSpace;
 import com.intellij.psi.filters.*;
-import com.intellij.psi.filters.position.*;
+import com.intellij.psi.filters.position.FilterPattern;
+import com.intellij.psi.filters.position.LeftNeighbour;
+import com.intellij.psi.filters.position.PositionElementFilter;
 import com.intellij.psi.impl.source.tree.LeafPsiElement;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.util.ArrayUtil;
@@ -234,6 +237,23 @@ public class JetKeywordCompletionContributor extends CompletionContributor {
         }
     }
 
+    private static class SimplePrefixMatcher extends PrefixMatcher {
+        protected SimplePrefixMatcher(String prefix) {
+            super(prefix);
+        }
+
+        @Override
+        public boolean prefixMatches(@NotNull String name) {
+            return StringUtil.startsWithIgnoreCase(name, getPrefix());
+        }
+
+        @NotNull
+        @Override
+        public PrefixMatcher cloneWithPrefix(@NotNull String prefix) {
+            return new SimplePrefixMatcher(prefix);
+        }
+    }
+
     public static class KeywordsCompletionProvider extends CompletionProvider<CompletionParameters> {
 
         private final Collection<LookupElement> elements;
@@ -250,20 +270,19 @@ public class JetKeywordCompletionContributor extends CompletionContributor {
                     }
 
                     if (!FUNCTION_KEYWORDS.contains(keyword)) {
-                        return lookupElementBuilder.setInsertHandler(KEYWORDS_INSERT_HANDLER);
+                        return lookupElementBuilder.withInsertHandler(KEYWORDS_INSERT_HANDLER);
                     }
 
-                    return lookupElementBuilder.setInsertHandler(FUNCTION_INSERT_HANDLER);
+                    return lookupElementBuilder.withInsertHandler(FUNCTION_INSERT_HANDLER);
                 }
             });
         }
 
         @Override
         protected void addCompletions(@NotNull CompletionParameters parameters, ProcessingContext context,
-                                      @NotNull CompletionResultSet result) {
-            result.addAllElements(elements);
+                                      @NotNull final CompletionResultSet result) {
+            result.withPrefixMatcher(new SimplePrefixMatcher(result.getPrefixMatcher().getPrefix())).addAllElements(elements);
         }
-
     }
 
     public JetKeywordCompletionContributor() {

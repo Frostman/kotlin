@@ -24,6 +24,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.jet.cli.common.CLICompiler;
 import org.jetbrains.jet.cli.common.ExitCode;
 import org.jetbrains.jet.cli.common.messages.*;
+import org.jetbrains.jet.cli.common.util.CompilerPathUtil;
 import org.jetbrains.jet.cli.jvm.compiler.CompileEnvironmentUtil;
 import org.jetbrains.jet.cli.jvm.compiler.JetCoreEnvironment;
 import org.jetbrains.jet.cli.jvm.compiler.K2JVMCompileEnvironmentConfiguration;
@@ -31,6 +32,7 @@ import org.jetbrains.jet.cli.jvm.compiler.KotlinToJVMBytecodeCompiler;
 import org.jetbrains.jet.cli.jvm.repl.ReplFromTerminal;
 import org.jetbrains.jet.codegen.BuiltinToJavaTypesMapping;
 import org.jetbrains.jet.codegen.CompilationException;
+import org.jetbrains.jet.config.CommonConfigurationKeys;
 import org.jetbrains.jet.config.CompilerConfiguration;
 import org.jetbrains.jet.lang.BuiltinsScopeExtensionMode;
 import org.jetbrains.jet.utils.PathUtil;
@@ -67,6 +69,28 @@ public class K2JVMCompiler extends CLICompiler<K2JVMCompilerArguments, K2JVMComp
             ReplFromTerminal.run(rootDisposable, compilerConfiguration);
             return ExitCode.OK;
         }
+        else if (arguments.module != null) {
+            // TODO add sources from modules
+        }
+        else if (arguments.script) {
+            compilerConfiguration.add(CommonConfigurationKeys.SOURCE_ROOTS_KEY, arguments.freeArgs.get(0));
+        }
+        else {
+            // TODO ideally we'd unify to just having a single field that supports multiple files/dirs
+            if (arguments.getSourceDirs() != null) {
+                for (String source : arguments.getSourceDirs()) {
+                    compilerConfiguration.add(CommonConfigurationKeys.SOURCE_ROOTS_KEY, source);
+                }
+            }
+            else {
+                if (arguments.src != null) {
+                    compilerConfiguration.add(CommonConfigurationKeys.SOURCE_ROOTS_KEY, arguments.src);
+                }
+                for (String freeArg : arguments.freeArgs) {
+                    compilerConfiguration.add(CommonConfigurationKeys.SOURCE_ROOTS_KEY, freeArg);
+                }
+            }
+        }
 
         JetCoreEnvironment environment = JetCoreEnvironment.createCoreEnvironmentForJVM(rootDisposable, compilerConfiguration);
         boolean builtins = arguments.builtins;
@@ -88,8 +112,7 @@ public class K2JVMCompiler extends CLICompiler<K2JVMCompilerArguments, K2JVMComp
             if (arguments.module != null) {
                 boolean oldVerbose = messageCollector.isVerbose();
                 messageCollector.setVerbose(false);
-                List<Module> modules = CompileEnvironmentUtil
-                        .loadModuleScript(arguments.module, messageCollector);
+                List<Module> modules = CompileEnvironmentUtil.loadModuleScript(arguments.module, messageCollector);
                 messageCollector.setVerbose(oldVerbose);
                 File directory = new File(arguments.module).getParentFile();
                 noErrors = KotlinToJVMBytecodeCompiler.compileModules(configuration, modules,
@@ -97,27 +120,11 @@ public class K2JVMCompiler extends CLICompiler<K2JVMCompilerArguments, K2JVMComp
                                                                       arguments.includeRuntime);
             }
             else if (arguments.script) {
-                configuration.getEnvironment().addSources(arguments.freeArgs.get(0));
                 List<String> scriptArgs = arguments.freeArgs.subList(1, arguments.freeArgs.size());
                 noErrors = KotlinToJVMBytecodeCompiler.compileAndExecuteScript(configuration, scriptArgs);
             }
             else {
-                // TODO ideally we'd unify to just having a single field that supports multiple files/dirs
-                if (arguments.getSourceDirs() != null) {
-                    noErrors = KotlinToJVMBytecodeCompiler.compileBunchOfSourceDirectories(configuration,
-                            arguments.getSourceDirs(), jar, outputDir, arguments.script, arguments.includeRuntime);
-                }
-                else {
-                    if (arguments.src != null) {
-                        configuration.getEnvironment().addSources(arguments.src);
-                    }
-                    for (String freeArg : arguments.freeArgs) {
-                        configuration.getEnvironment().addSources(freeArg);
-                    }
-
-                    noErrors = KotlinToJVMBytecodeCompiler.compileBunchOfSources(
-                            configuration, jar, outputDir, arguments.includeRuntime);
-                }
+                noErrors = KotlinToJVMBytecodeCompiler.compileBunchOfSources(configuration, jar, outputDir, arguments.includeRuntime);
             }
             return noErrors ? OK : COMPILATION_ERROR;
         }
@@ -143,6 +150,13 @@ public class K2JVMCompiler extends CLICompiler<K2JVMCompilerArguments, K2JVMComp
         return new K2JVMCompilerArguments();
     }
 
+    // TODO this method is here only to workaround KT-2498
+    @Override
+    protected void configureEnvironment(@NotNull K2JVMCompileEnvironmentConfiguration configuration,
+            @NotNull K2JVMCompilerArguments arguments) {
+        super.configureEnvironment(configuration, arguments);
+    }
+
     //TODO: Hacked! Be sure that our kotlin stuff builds correctly before you remove.
     // our compiler throws method not found error
     // probably relates to KT-1863... well, may be not
@@ -152,19 +166,11 @@ public class K2JVMCompiler extends CLICompiler<K2JVMCompilerArguments, K2JVMComp
         return super.exec(errStream, arguments);
     }
 
-
-    @Override
-    protected void configureEnvironment(@NotNull K2JVMCompileEnvironmentConfiguration configuration, @NotNull K2JVMCompilerArguments arguments) {
-        super.configureEnvironment(configuration, arguments);
-
-        configuration.getEnvironment().configure(createCompilerConfiguration(arguments));
-    }
-
     @NotNull
     private static CompilerConfiguration createCompilerConfiguration(@NotNull K2JVMCompilerArguments arguments) {
         CompilerConfiguration configuration = new CompilerConfiguration();
-        configuration.putUserData(JVMConfigurationKeys.CLASSPATH_KEY, getClasspath(arguments).toArray(new File[0]));
-        configuration.putUserData(JVMConfigurationKeys.ANNOTATIONS_PATH_KEY, getAnnotationsPath(arguments).toArray(new File[0]));
+        configuration.addAll(JVMConfigurationKeys.CLASSPATH_KEY, getClasspath(arguments));
+        configuration.addAll(JVMConfigurationKeys.ANNOTATIONS_PATH_KEY, getAnnotationsPath(arguments));
         return configuration;
     }
 
@@ -175,7 +181,7 @@ public class K2JVMCompiler extends CLICompiler<K2JVMCompilerArguments, K2JVMComp
             classpath.add(PathUtil.findRtJar());
         }
         if (!arguments.noStdlib) {
-            classpath.add(PathUtil.getDefaultRuntimePath());
+            classpath.add(CompilerPathUtil.getRuntimePath());
         }
         if (arguments.classpath != null) {
             for (String element : Splitter.on(File.pathSeparatorChar).split(arguments.classpath)) {
@@ -189,7 +195,7 @@ public class K2JVMCompiler extends CLICompiler<K2JVMCompilerArguments, K2JVMComp
     private static List<File> getAnnotationsPath(@NotNull K2JVMCompilerArguments arguments) {
         List<File> annotationsPath = Lists.newArrayList();
         if (!arguments.noJdkAnnotations) {
-            annotationsPath.add(PathUtil.getJdkAnnotationsPath());
+            annotationsPath.add(CompilerPathUtil.getJdkAnnotationsPath());
         }
         if (arguments.annotations != null) {
             for (String element : Splitter.on(File.pathSeparatorChar).split(arguments.annotations)) {

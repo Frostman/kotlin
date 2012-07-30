@@ -16,6 +16,8 @@
 
 package org.jetbrains.k2js.test.semantics;
 
+import junit.framework.Assert;
+import org.jetbrains.k2js.facade.exceptions.TranslationInternalException;
 import org.jetbrains.k2js.test.SingleFileTranslationTest;
 
 /**
@@ -40,5 +42,19 @@ public final class NumberTest extends SingleFileTranslationTest {
 
     public void testByteAndShortConversions() throws Exception {
         fooBoxTest();
+    }
+
+    public void testDivision() throws Exception {
+        fooBoxIsValue("SUCCESS");
+    }
+
+    public void testHexademicalConstant() throws Exception {
+        try {
+            fooBoxTest();
+        } catch (TranslationInternalException e) {
+            Throwable cause = e.getCause();
+            Assert.assertTrue(cause instanceof IllegalStateException);
+            Assert.assertTrue(cause.getMessage().startsWith("Unsupported long constant "));
+        }
     }
 }

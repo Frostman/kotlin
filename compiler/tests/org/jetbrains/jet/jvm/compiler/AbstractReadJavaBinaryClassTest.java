@@ -57,7 +57,7 @@ public abstract class AbstractReadJavaBinaryClassTest extends TestCaseWithTmpdir
         File txtFile = new File(javaFile.getPath().replaceFirst("\\.java$", ".txt"));
         NamespaceDescriptor nsa = compileKotlin(ktFile);
         NamespaceDescriptor nsb = LoadJavaDescriptorUtil.compileJava(Collections.singletonList(javaFile), tmpdir, myTestRootDisposable);
-        NamespaceComparator.compareNamespaces(nsa, nsb, false, txtFile);
+        NamespaceComparator.compareNamespaces(nsa, nsb, NamespaceComparator.DONT_INCLUDE_METHODS_OF_OBJECT, txtFile);
     }
 
     @NotNull
