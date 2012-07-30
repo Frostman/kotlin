@@ -16,14 +16,26 @@
 
 package org.jetbrains.jet.codegen;
 
+import com.intellij.openapi.components.ServiceManager;
 import org.jetbrains.jet.ConfigurationKind;
+import org.jetbrains.jet.lang.parsing.JetParserDefinition;
+import org.jetbrains.jet.lang.parsing.JetScriptDefinition;
+import org.jetbrains.jet.lang.parsing.JetScriptDefinitionProvider;
+import org.jetbrains.jet.lang.resolve.AnalyzerScriptParameter;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.List;
 
 /**
  * @author Stepan Koltsov
  */
 public class ScriptGenTest extends CodegenTestCase {
+
+    public static final JetScriptDefinition FIB_SCRIPT_DEFINITION =
+            new JetScriptDefinition(".lang.kt", new AnalyzerScriptParameter("num", "jet.Int"));
 
     @Override
     protected void setUp() throws Exception {
@@ -86,4 +98,33 @@ public class ScriptGenTest extends CodegenTestCase {
         blackBoxFile("script/empty.ktscript");
     }
 
+    public void testLanguage() {
+        JetScriptDefinitionProvider.getInstance(myEnvironment.getProject()).addScriptDefinition(FIB_SCRIPT_DEFINITION);
+        loadFile("script/fib.lang.kt");
+        final Class aClass = loadClass("Fib", generateClassesInFile());
+        try {
+            Constructor constructor = aClass.getConstructor(int.class);
+            Field result = aClass.getField("result");
+            Object script = constructor.newInstance(5);
+            assertEquals(8,result.get(script));
+        }
+        catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void testLanguageWithPackage() {
+        JetScriptDefinitionProvider.getInstance(myEnvironment.getProject()).addScriptDefinition(FIB_SCRIPT_DEFINITION);
+        loadFile("script/fibwp.lang.kt");
+        final Class aClass = loadClass("test.Fibwp", generateClassesInFile());
+        try {
+            Constructor constructor = aClass.getConstructor(int.class);
+            Field result = aClass.getField("result");
+            Object script = constructor.newInstance(5);
+            assertEquals(8,result.get(script));
+        }
+        catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
