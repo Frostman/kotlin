@@ -17,9 +17,9 @@
 package org.jetbrains.jet.cli.jvm;
 
 import com.intellij.openapi.util.io.FileUtil;
-import com.intellij.openapi.vfs.LocalFileSystem;
 import junit.framework.Assert;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.jet.cli.common.CLICompiler;
 import org.jetbrains.jet.cli.common.ExitCode;
 import org.jetbrains.jet.cli.jvm.compiler.KotlinToJVMBytecodeCompiler;
 import org.jetbrains.jet.lang.parsing.JetScriptDefinition;
@@ -32,15 +32,9 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
 
-import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.PrintStream;
-import java.io.StringReader;
-import java.lang.reflect.InvocationTargetException;
+import java.io.*;
 import java.util.Arrays;
 import java.util.LinkedList;
-import java.util.List;
 
 /**
  * @author Stepan Koltsov
@@ -57,9 +51,8 @@ public class CliTest {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         PrintStream origOut = System.out;
         try {
-            // we change System.out because scripts ignore passed OutputStream and write to System.out
             System.setOut(new PrintStream(bytes));
-            ExitCode exitCode = new K2JVMCompiler().exec(System.out, args);
+            ExitCode exitCode = CLICompiler.doMainNoExit(new K2JVMCompiler(), args);
             return bytes.toString("utf-8") + exitCode + "\n";
         }
         catch (Exception e) {
@@ -114,8 +107,26 @@ public class CliTest {
     }
 
     @Test
+    public void diagnosticsOrder() throws Exception {
+        String[] args = {
+                "-src", "compiler/testData/cli/diagnosticsOrder1.kt"
+                        + File.pathSeparator
+                        + "compiler/testData/cli/diagnosticsOrder2.kt",
+                "-output", tmpdir.getTmpDir().getPath()};
+        executeCompilerCompareOutput(args);
+    }
+
+    @Test
+    public void multipleTextRangesInDiagnosticsOrder() throws Exception {
+        String[] args = {
+                "-src", "compiler/testData/cli/multipleTextRangesInDiagnosticsOrder.kt",
+                "-output", tmpdir.getTmpDir().getPath()};
+        executeCompilerCompareOutput(args);
+    }
+
+    @Test
     public void help() throws Exception {
-        executeCompilerCompareOutput(new String[] {"--help"});
+        executeCompilerCompareOutput(new String[] {"-help"});
     }
 
     @Test
@@ -126,6 +137,22 @@ public class CliTest {
     @Test
     public void ideTemplates() {
         executeCompilerCompareOutput(new String[]{ "-src", "compiler/testData/cli/ideTemplates.kt", "-output", tmpdir.getTmpDir().getPath()});
+    }
+
+    @Test
+    public void wrongArgument() {
+        executeCompilerCompareOutput(new String[] { "-wrongArgument" });
+    }
+
+    @Test
+    public void printArguments() {
+        try {
+            System.setProperty("kotlin.print.cmd.args", "true");
+            executeCompilerCompareOutput(new String[] {"-script", "compiler/testData/cli/hello.ktscript"});
+        }
+        finally {
+            System.clearProperty("kotlin.print.cmd.args");
+        }
     }
 
     @Test
@@ -162,22 +189,6 @@ public class CliTest {
         }
     }
 
-    @Test
-    public void testScriptWithoutScriptDefinition() {
-        LinkedList<AnalyzerScriptParameter> scriptParameters = new LinkedList<AnalyzerScriptParameter>();
-        AnalyzerScriptParameter parameter = new AnalyzerScriptParameter(Name.identifier("num"), JetTypeName.parse("jet.Int"));
-        scriptParameters.add(parameter);
-        Class aClass = KotlinToJVMBytecodeCompiler
-                .compileScript(getClass().getClassLoader(), "compiler/testData/cli/fib.fib.kt", scriptParameters, null);
-        Assert.assertNotNull(aClass);
-
-        try {
-            aClass.getConstructor(int.class).newInstance(4);
-        }
-        catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
 
     @Test
     public void testScriptWithScriptDefinition() {
