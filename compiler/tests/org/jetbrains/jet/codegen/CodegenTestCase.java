@@ -59,6 +59,7 @@ public abstract class CodegenTestCase extends UsefulTestCase {
     protected CodegenTestFiles myFiles;
 
     protected Object scriptInstance;
+    private GenerationState alreadyGenerated;
 
     protected void createEnvironmentWithMockJdkAndIdeaAnnotations() {
         if (myEnvironment != null) {
@@ -102,6 +103,7 @@ public abstract class CodegenTestCase extends UsefulTestCase {
         myFiles = null;
         myEnvironment = null;
         scriptInstance = null;
+        alreadyGenerated = null;
         super.tearDown();
     }
 
@@ -220,9 +222,15 @@ public abstract class CodegenTestCase extends UsefulTestCase {
             else {
                 String fqName = NamespaceCodegen.getJVMClassNameForKotlinNs(JetPsiUtil.getFQName(myFiles.getPsiFiles().get(0))).getFqName().getFqName();
                 Class<?> namespaceClass = loader.loadClass(fqName);
-                Method method = namespaceClass.getMethod("box");
-                r = (String) method.invoke(null);
-                assertEquals("OK", r);
+                try {
+                    Method method = namespaceClass.getMethod("box");
+                    r = (String) method.invoke(null);
+                    assertEquals("OK", r);
+                }
+                catch (NoSuchMethodException e) {
+                    Method method = namespaceClass.getMethod("main",String[].class);
+                    method.invoke(null,new Object[]{new String[0]});
+                }
             }
         } catch (Error e) {
             System.out.println(generateToText());
@@ -249,10 +257,15 @@ public abstract class CodegenTestCase extends UsefulTestCase {
     }
 
     protected String generateToText() {
-        return generateCommon(ClassBuilderFactories.TEXT).createText();
+        if(alreadyGenerated == null)
+            alreadyGenerated = generateCommon(ClassBuilderFactories.TEST);
+        return alreadyGenerated.createText();
     }
 
     private GenerationState generateCommon(ClassBuilderFactory classBuilderFactory) {
+        if(alreadyGenerated != null)
+            return alreadyGenerated;
+
         final AnalyzeExhaust analyzeExhaust = AnalyzerFacadeForJVM.analyzeFilesWithJavaIntegrationAndCheckForErrors(
                 myEnvironment.getProject(),
                 myFiles.getPsiFiles(),
@@ -263,6 +276,7 @@ public abstract class CodegenTestCase extends UsefulTestCase {
         AnalyzingUtils.throwExceptionOnErrors(analyzeExhaust.getBindingContext());
         GenerationState state = new GenerationState(myEnvironment.getProject(), classBuilderFactory, analyzeExhaust, myFiles.getPsiFiles());
         state.compileCorrectFiles(CompilationErrorHandler.THROW_EXCEPTION);
+        alreadyGenerated = state;
         return state;
     }
 
@@ -307,8 +321,7 @@ public abstract class CodegenTestCase extends UsefulTestCase {
     private GenerationState generateClassesInFileGetState() {
         GenerationState generationState;
         try {
-            ClassBuilderFactory classBuilderFactory = ClassBuilderFactories.binaries(false);
-            generationState = generateCommon(classBuilderFactory);
+            generationState = generateCommon(ClassBuilderFactories.TEST);
 
             if (DxChecker.RUN_DX_CHECKER) {
                 DxChecker.check(generationState.getFactory());
