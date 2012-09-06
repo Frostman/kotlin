@@ -2,15 +2,15 @@ package kotlin
 
 import java.util.*
 
-public inline fun <T> java.lang.Iterable<T>.toString(): String {
+public inline fun <T> Iterable<T>.toString(): String {
     return makeString(", ", "[", "]")
 }
 
-public inline fun <T> java.util.List<T>.equals(that: List<T>): Boolean {
+public inline fun <T> List<T>.equals(that: List<T>): Boolean {
     val s1 = this.size()
     val s2 = that.size()
     if (s1 == s2) {
-        for (i in 0.upto(s1)) {
+        for (i in 0.rangeTo(s1)) {
             val elem1 = this.get(i)
             val elem2 = that.get(i)
             if (elem1 != elem2) {
@@ -45,7 +45,7 @@ public inline fun hashSet<T>(vararg values: T) : HashSet<T> {
  *
  * @includeFunctionBody ../../test/CollectionTest.kt map
  */
-public inline fun <K,V,R> java.util.Map<K,V>.map(transform: (java.util.Map.Entry<K,V>) -> R) : java.util.List<R> {
+public inline fun <K,V,R> Map<K,V>.map(transform: (Map.Entry<K,V>) -> R) : List<R> {
     return mapTo(java.util.ArrayList<R>(), transform)
 }
 
@@ -55,8 +55,8 @@ public inline fun <K,V,R> java.util.Map<K,V>.map(transform: (java.util.Map.Entry
  *
  * @includeFunctionBody ../../test/MapTest.kt mapValues
  */
-public inline fun <K,V,R> java.util.Map<K,V>.mapValues(transform : (java.util.Map.Entry<K,V>) -> R): java.util.Map<K,R> {
-    return mapValuesTo(java.util.HashMap<K,R>(), transform)
+public inline fun <K,V,R> MutableMap<K,V>.mapValues(transform : (Map.Entry<K,V>) -> R): Map<K,R> {
+    return mapValuesTo(HashMap<K,R>(), transform)
 }
 
 
@@ -65,6 +65,6 @@ public inline fun <K,V,R> java.util.Map<K,V>.mapValues(transform : (java.util.Ma
  *
  * @includeFunctionBody ../../test/CollectionTest.kt map
  */
-public inline fun <T, R> java.util.Collection<T>.map(transform : (T) -> R) : java.util.List<R> {
+public inline fun <T, R> Collection<T>.map(transform : (T) -> R) : List<R> {
     return mapTo(java.util.ArrayList<R>(), transform)
 }

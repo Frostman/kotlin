@@ -18,6 +18,7 @@ package org.jetbrains.jet.lang.resolve;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.jet.lang.ModuleConfiguration;
 import org.jetbrains.jet.lang.descriptors.ClassDescriptor;
 import org.jetbrains.jet.lang.descriptors.ClassifierDescriptor;
 import org.jetbrains.jet.lang.descriptors.DeclarationDescriptor;
@@ -36,6 +37,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import static org.jetbrains.jet.lang.diagnostics.Errors.CLASS_HAS_KOTLIN_ANALOG;
 import static org.jetbrains.jet.lang.diagnostics.Errors.UNSUPPORTED;
 import static org.jetbrains.jet.lang.diagnostics.Errors.WRONG_NUMBER_OF_TYPE_ARGUMENTS;
 
@@ -47,6 +49,7 @@ public class TypeResolver {
     private AnnotationResolver annotationResolver;
     private DescriptorResolver descriptorResolver;
     private QualifiedExpressionResolver qualifiedExpressionResolver;
+    private ModuleConfiguration moduleConfiguration;
 
     @Inject
     public void setDescriptorResolver(DescriptorResolver descriptorResolver) {
@@ -63,12 +66,17 @@ public class TypeResolver {
         this.qualifiedExpressionResolver = qualifiedExpressionResolver;
     }
 
+    @Inject
+    public void setModuleConfiguration(@NotNull ModuleConfiguration moduleConfiguration) {
+        this.moduleConfiguration = moduleConfiguration;
+    }
+
     @NotNull
     public JetType resolveType(@NotNull final JetScope scope, @NotNull final JetTypeReference typeReference, BindingTrace trace, boolean checkBounds) {
         JetType cachedType = trace.getBindingContext().get(BindingContext.TYPE, typeReference);
         if (cachedType != null) return cachedType;
 
-        final List<AnnotationDescriptor> annotations = annotationResolver.createAnnotationStubs(typeReference.getAnnotations(), trace);
+        final List<AnnotationDescriptor> annotations = annotationResolver.getResolvedAnnotations(typeReference.getAnnotations(), trace);
 
         JetTypeElement typeElement = typeReference.getTypeElement();
         JetType type = resolveTypeElement(scope, annotations, typeElement, false, trace, checkBounds);
@@ -281,6 +289,10 @@ public class TypeResolver {
         Collection<? extends DeclarationDescriptor> descriptors = qualifiedExpressionResolver.lookupDescriptorsForUserType(userType, scope, trace);
         for (DeclarationDescriptor descriptor : descriptors) {
             if (descriptor instanceof ClassifierDescriptor) {
+                Collection<ClassDescriptor> kotlinAnalogs = moduleConfiguration.getKotlinAnalogs(DescriptorUtils.getFQName(descriptor));
+                if (!kotlinAnalogs.isEmpty()) {
+                    trace.report(CLASS_HAS_KOTLIN_ANALOG.on(userType, kotlinAnalogs));
+                }
                 return (ClassifierDescriptor) descriptor;
             }
         }

@@ -108,18 +108,12 @@ public class JetControlFlowProcessor {
 
             @Override
             public void visitWhenConditionIsPattern(JetWhenConditionIsPattern condition) {
-                JetPattern pattern = condition.getPattern();
-                if (pattern != null) {
-                    pattern.accept(patternVisitor);
-                }
+                // TODO: types in CF?
             }
 
             @Override
             public void visitWhenConditionWithExpression(JetWhenConditionWithExpression condition) {
-                JetExpressionPattern pattern = condition.getPattern();
-                if (pattern != null) {
-                    pattern.accept(patternVisitor);
-                }
+                value(condition.getExpression(), inCondition);
             }
 
             @Override
@@ -128,50 +122,6 @@ public class JetControlFlowProcessor {
             }
         };
         private final JetVisitorVoid patternVisitor = new JetVisitorVoid() {
-            @Override
-            public void visitTypePattern(JetTypePattern typePattern) {
-                // TODO
-            }
-
-            @Override
-            public void visitWildcardPattern(JetWildcardPattern pattern) {
-                // TODO
-            }
-
-            @Override
-            public void visitExpressionPattern(JetExpressionPattern pattern) {
-                value(pattern.getExpression(), inCondition);
-            }
-
-            @Override
-            public void visitTuplePattern(JetTuplePattern pattern) {
-                List<JetTuplePatternEntry> entries = pattern.getEntries();
-                for (JetTuplePatternEntry entry : entries) {
-                    JetPattern entryPattern = entry.getPattern();
-                    if (entryPattern != null) {
-                        entryPattern.accept(this);
-                    }
-                }
-            }
-
-            @Override
-            public void visitDecomposerPattern(JetDecomposerPattern pattern) {
-                value(pattern.getDecomposerExpression(), inCondition);
-                JetTuplePattern argumentList = pattern.getArgumentList();
-                if (argumentList != null) {
-                    argumentList.accept(this);
-                }
-            }
-
-            @Override
-            public void visitBindingPattern(JetBindingPattern pattern) {
-                JetProperty variableDeclaration = pattern.getVariableDeclaration();
-                builder.write(pattern, variableDeclaration);
-                JetWhenCondition condition = pattern.getCondition();
-                if (condition != null) {
-                    condition.accept(conditionVisitor);
-                }
-            }
 
             @Override
             public void visitJetElement(JetElement element) {
@@ -529,9 +479,13 @@ public class JetControlFlowProcessor {
             }
             JetParameter loopParameter = expression.getLoopParameter();
             if (loopParameter != null) {
-                builder.declare(loopParameter);
-                builder.write(loopParameter, loopParameter);
+                value(loopParameter, inCondition);
             }
+            else {
+                JetMultiDeclaration multiParameter = expression.getMultiParameter();
+                value(multiParameter, inCondition);
+            }
+
             // TODO : primitive cases
             Label loopExitPoint = builder.createUnboundLabel();
             Label conditionEntryPoint = builder.createUnboundLabel();
@@ -632,8 +586,8 @@ public class JetControlFlowProcessor {
 
         @Override
         public void visitParameter(JetParameter parameter) {
-            JetExpression defaultValue = parameter.getDefaultValue();
             builder.declare(parameter);
+            JetExpression defaultValue = parameter.getDefaultValue();
             if (defaultValue != null) {
                 value(defaultValue, inCondition);
             }
@@ -743,6 +697,19 @@ public class JetControlFlowProcessor {
         }
 
         @Override
+        public void visitMultiDeclaration(JetMultiDeclaration declaration) {
+            JetExpression initializer = declaration.getInitializer();
+            if (initializer != null) {
+                builder.read(initializer);
+            }
+            List<JetMultiDeclarationEntry> entries = declaration.getEntries();
+            for (JetMultiDeclarationEntry entry : entries) {
+                builder.declare(entry);
+                builder.write(entry, entry);
+            }
+        }
+
+        @Override
         public void visitPropertyAccessor(JetPropertyAccessor accessor) {
             processLocalDeclaration(accessor);
         }
@@ -789,10 +756,7 @@ public class JetControlFlowProcessor {
         @Override
         public void visitIsExpression(final JetIsExpression expression) {
             value(expression.getLeftHandSide(), inCondition);
-            JetPattern pattern = expression.getPattern();
-            if (pattern != null) {
-                pattern.accept(patternVisitor);
-            }
+            // no CF for types
             // TODO : builder.read(expression.getPattern());
             builder.read(expression);
         }
@@ -819,7 +783,7 @@ public class JetControlFlowProcessor {
                         trace.report(ELSE_MISPLACED_IN_WHEN.on(whenEntry));
                     }
                 }
-                boolean isIrrefutable = JetPsiUtil.isIrrefutable(whenEntry);
+                boolean isIrrefutable = whenEntry.isElse();
                 if (isIrrefutable) {
                     hasElseOrIrrefutableBranch = true;
                 }

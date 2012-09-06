@@ -76,17 +76,17 @@ public class CallMaker {
 
         private final PsiElement callElement;
         private final ReceiverDescriptor explicitReceiver;
-        private ASTNode callOperationNode;
+        private final ASTNode callOperationNode;
         private final JetExpression calleeExpression;
         private final List<? extends ValueArgument> valueArguments;
         private final Call.CallType callType;
 
-        protected CallImpl(@Nullable PsiElement callElement, @NotNull ReceiverDescriptor explicitReceiver, @Nullable ASTNode callOperationNode, @NotNull JetExpression calleeExpression, @NotNull List<? extends ValueArgument> valueArguments) {
+        protected CallImpl(@NotNull PsiElement callElement, @NotNull ReceiverDescriptor explicitReceiver, @Nullable ASTNode callOperationNode, @Nullable JetExpression calleeExpression, @NotNull List<? extends ValueArgument> valueArguments) {
             this(callElement, explicitReceiver, callOperationNode, calleeExpression, valueArguments, CallType.DEFAULT);
         }
 
-        protected CallImpl(@Nullable PsiElement callElement, @NotNull ReceiverDescriptor explicitReceiver, @Nullable ASTNode callOperationNode,
-                @NotNull JetExpression calleeExpression, @NotNull List<? extends ValueArgument> valueArguments, @NotNull CallType callType) {
+        protected CallImpl(@NotNull PsiElement callElement, @NotNull ReceiverDescriptor explicitReceiver, @Nullable ASTNode callOperationNode,
+                @Nullable JetExpression calleeExpression, @NotNull List<? extends ValueArgument> valueArguments, @NotNull CallType callType) {
             this.callElement = callElement;
             this.explicitReceiver = explicitReceiver;
             this.callOperationNode = callOperationNode;
@@ -238,31 +238,37 @@ public class CallMaker {
                 return ReceiverDescriptor.NO_RECEIVER;
             }
 
+            @Override
             @Nullable
             public JetExpression getCalleeExpression() {
                 return callElement.getCalleeExpression();
             }
 
+            @Override
             @Nullable
             public JetValueArgumentList getValueArgumentList() {
                 return callElement.getValueArgumentList();
             }
 
+            @Override
             @NotNull
             public List<? extends ValueArgument> getValueArguments() {
                 return callElement.getValueArguments();
             }
 
+            @Override
             @NotNull
             public List<JetExpression> getFunctionLiteralArguments() {
                 return callElement.getFunctionLiteralArguments();
             }
 
+            @Override
             @NotNull
             public List<JetTypeProjection> getTypeArguments() {
                 return callElement.getTypeArguments();
             }
 
+            @Override
             @Nullable
             public JetTypeArgumentList getTypeArgumentList() {
                 return callElement.getTypeArgumentList();
@@ -285,5 +291,9 @@ public class CallMaker {
                 return CallType.DEFAULT;
             }
         };
+    }
+
+    public static Call makeCall(@NotNull JetElement callElement, @NotNull ReceiverDescriptor explicitReceiver) {
+        return new CallImpl(callElement, explicitReceiver, null, null, Collections.<ValueArgument>emptyList());
     }
 }

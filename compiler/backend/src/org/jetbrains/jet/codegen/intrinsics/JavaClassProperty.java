@@ -19,13 +19,14 @@ package org.jetbrains.jet.codegen.intrinsics;
 import com.intellij.psi.PsiElement;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.jet.codegen.ExpressionCodegen;
-import org.jetbrains.jet.codegen.GenerationState;
-import org.jetbrains.jet.codegen.JetTypeMapper;
-import org.jetbrains.jet.codegen.StackValue;
-import org.jetbrains.jet.lang.psi.JetExpression;
 import org.jetbrains.asm4.Type;
 import org.jetbrains.asm4.commons.InstructionAdapter;
+import org.jetbrains.jet.codegen.AsmTypeConstants;
+import org.jetbrains.jet.codegen.ExpressionCodegen;
+import org.jetbrains.jet.codegen.StackValue;
+import org.jetbrains.jet.codegen.state.GenerationState;
+import org.jetbrains.jet.lang.psi.JetExpression;
+import org.jetbrains.jet.lang.resolve.java.JvmPrimitiveType;
 
 import java.util.List;
 
@@ -34,36 +35,24 @@ import java.util.List;
  */
 public class JavaClassProperty implements IntrinsicMethod {
     @Override
-    public StackValue generate(ExpressionCodegen codegen, InstructionAdapter v, @NotNull Type expectedType, @Nullable PsiElement element, @Nullable List<JetExpression> arguments, StackValue receiver, @NotNull GenerationState state) {
+    public StackValue generate(
+            ExpressionCodegen codegen,
+            InstructionAdapter v,
+            @NotNull Type expectedType,
+            @Nullable PsiElement element,
+            @Nullable List<JetExpression> arguments,
+            StackValue receiver,
+            @NotNull GenerationState state
+    ) {
         receiver.put(receiver.type, v);
-        switch (receiver.type.getSort()) {
-            case Type.BOOLEAN:
-                v.getstatic("java/lang/Boolean", "TYPE", "Ljava/lang/Class;");
-                break;
-            case Type.BYTE:
-                v.getstatic("java/lang/Byte", "TYPE", "Ljava/lang/Class;");
-                break;
-            case Type.SHORT:
-                v.getstatic("java/lang/Short", "TYPE", "Ljava/lang/Class;");
-                break;
-            case Type.CHAR:
-                v.getstatic("java/lang/Character", "TYPE", "Ljava/lang/Class;");
-                break;
-            case Type.INT:
-                v.getstatic("java/lang/Integer", "TYPE", "Ljava/lang/Class;");
-                break;
-            case Type.LONG:
-                v.getstatic("java/lang/Long", "TYPE", "Ljava/lang/Class;");
-                break;
-            case Type.FLOAT:
-                v.getstatic("java/lang/Float", "TYPE", "Ljava/lang/Class;");
-                break;
-            case Type.DOUBLE:
-                v.getstatic("java/lang/Double", "TYPE", "Ljava/lang/Class;");
-                break;
-            default:
-                v.invokevirtual("java/lang/Object", "getClass", "()Ljava/lang/Class;");
+        JvmPrimitiveType primitiveType = JvmPrimitiveType.getByAsmType(receiver.type);
+        if (primitiveType != null) {
+            v.pop();
+            v.getstatic(primitiveType.getWrapper().getAsmType().getInternalName(), "TYPE", "Ljava/lang/Class;");
         }
-        return StackValue.onStack(JetTypeMapper.JL_CLASS_TYPE);
+        else {
+            v.invokevirtual("java/lang/Object", "getClass", "()Ljava/lang/Class;");
+        }
+        return StackValue.onStack(AsmTypeConstants.getType(Class.class));
     }
 }

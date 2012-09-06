@@ -17,22 +17,22 @@
 package org.jetbrains.jet.lang.types.expressions;
 
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Pair;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.tree.TokenSet;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.JetNodeTypes;
-import org.jetbrains.jet.lang.descriptors.CallableDescriptor;
-import org.jetbrains.jet.lang.descriptors.DeclarationDescriptor;
-import org.jetbrains.jet.lang.descriptors.TypeParameterDescriptor;
-import org.jetbrains.jet.lang.descriptors.VariableDescriptor;
-import org.jetbrains.jet.lang.psi.JetExpression;
-import org.jetbrains.jet.lang.psi.JetImportDirective;
-import org.jetbrains.jet.lang.psi.JetPsiFactory;
-import org.jetbrains.jet.lang.psi.JetSimpleNameExpression;
+import org.jetbrains.jet.lang.descriptors.*;
+import org.jetbrains.jet.lang.psi.*;
 import org.jetbrains.jet.lang.resolve.*;
+import org.jetbrains.jet.lang.resolve.calls.CallMaker;
+import org.jetbrains.jet.lang.resolve.calls.OverloadResolutionResults;
 import org.jetbrains.jet.lang.resolve.calls.autocasts.DataFlowInfo;
-import org.jetbrains.jet.lang.resolve.calls.inference.*;
+import org.jetbrains.jet.lang.resolve.calls.inference.ConstraintPosition;
+import org.jetbrains.jet.lang.resolve.calls.inference.ConstraintSystem;
+import org.jetbrains.jet.lang.resolve.calls.inference.ConstraintSystemImpl;
+import org.jetbrains.jet.lang.resolve.calls.inference.ConstraintsUtil;
 import org.jetbrains.jet.lang.resolve.name.FqName;
 import org.jetbrains.jet.lang.resolve.name.Name;
 import org.jetbrains.jet.lang.resolve.scopes.JetScope;
@@ -40,19 +40,17 @@ import org.jetbrains.jet.lang.resolve.scopes.WritableScope;
 import org.jetbrains.jet.lang.resolve.scopes.WritableScopeImpl;
 import org.jetbrains.jet.lang.resolve.scopes.receivers.ExpressionReceiver;
 import org.jetbrains.jet.lang.resolve.scopes.receivers.ReceiverDescriptor;
-import org.jetbrains.jet.lang.types.JetType;
-import org.jetbrains.jet.lang.types.NamespaceType;
-import org.jetbrains.jet.lang.types.TypeUtils;
-import org.jetbrains.jet.lang.types.Variance;
+import org.jetbrains.jet.lang.types.*;
 import org.jetbrains.jet.lang.types.checker.JetTypeChecker;
 import org.jetbrains.jet.lang.types.lang.JetStandardClasses;
 import org.jetbrains.jet.lang.types.lang.JetStandardLibrary;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
-import static org.jetbrains.jet.lang.diagnostics.Errors.RESULT_TYPE_MISMATCH;
+import static org.jetbrains.jet.lang.diagnostics.Errors.*;
 import static org.jetbrains.jet.lang.resolve.BindingContext.*;
 
 /**
@@ -247,5 +245,80 @@ public class ExpressionTypingUtils {
         }
 
         return constraintSystem.isSuccessful() && ConstraintsUtil.checkBoundsAreSatisfied(constraintSystem);
+    }
+
+    @NotNull
+    public static OverloadResolutionResults<FunctionDescriptor> resolveFakeCall(
+            @NotNull ReceiverDescriptor receiver,
+            @NotNull ExpressionTypingContext context,
+            @NotNull Name name
+    ) {
+        return makeAndResolveFakeCall(receiver, context, name).getSecond();
+    }
+
+    @NotNull
+    public static Pair<Call, OverloadResolutionResults<FunctionDescriptor>> makeAndResolveFakeCall(
+            @NotNull ReceiverDescriptor receiver,
+            @NotNull ExpressionTypingContext context,
+            @NotNull Name name
+    ) {
+        JetReferenceExpression fake = JetPsiFactory.createSimpleName(context.expressionTypingServices.getProject(), "fake");
+        BindingTrace fakeTrace = TemporaryBindingTrace.create(context.trace);
+        Call call = CallMaker.makeCall(fake, receiver, null, fake, Collections.<ValueArgument>emptyList());
+        return Pair.create(call, context.replaceBindingTrace(fakeTrace).resolveCallWithGivenName(call, fake, name));
+    }
+
+    public static void defineLocalVariablesFromMultiDeclaration(
+            @NotNull WritableScope writableScope,
+            @NotNull JetMultiDeclaration multiDeclaration,
+            @NotNull ReceiverDescriptor receiver,
+            @NotNull JetExpression reportErrorsOn,
+            @NotNull ExpressionTypingContext context
+    ) {
+        int componentIndex = 1;
+        for (JetMultiDeclarationEntry entry : multiDeclaration.getEntries()) {
+            final Name componentName = Name.identifier("component" + componentIndex);
+            componentIndex++;
+
+            JetType expectedType = getExpectedTypeForComponent(context, entry);
+            OverloadResolutionResults<FunctionDescriptor> results =
+                    resolveFakeCall(receiver, context.replaceExpectedType(expectedType), componentName);
+
+            JetType componentType = null;
+            if (results.isSuccess()) {
+                context.trace.record(COMPONENT_RESOLVED_CALL, entry, results.getResultingCall());
+                componentType = results.getResultingDescriptor().getReturnType();
+                if (componentType != null && expectedType != TypeUtils.NO_EXPECTED_TYPE
+                       && !JetTypeChecker.INSTANCE.isSubtypeOf(componentType, expectedType)) {
+
+                    context.trace.report(
+                            COMPONENT_FUNCTION_RETURN_TYPE_MISMATCH.on(reportErrorsOn, componentName, componentType, expectedType));
+                }
+            }
+            else if (results.isAmbiguity()) {
+                context.trace.report(COMPONENT_FUNCTION_AMBIGUITY.on(reportErrorsOn, componentName, results.getResultingCalls()));
+            }
+            else {
+                context.trace.report(COMPONENT_FUNCTION_MISSING.on(reportErrorsOn, componentName));
+            }
+            if (componentType == null) {
+                componentType = ErrorUtils.createErrorType(componentName + "() return type");
+            }
+            VariableDescriptor variableDescriptor = context.expressionTypingServices.getDescriptorResolver().
+                resolveLocalVariableDescriptorWithType(writableScope.getContainingDeclaration(), entry, componentType, context.trace);
+
+            writableScope.addVariableDescriptor(variableDescriptor);
+        }
+    }
+
+    @NotNull
+    private static JetType getExpectedTypeForComponent(ExpressionTypingContext context, JetMultiDeclarationEntry entry) {
+        JetTypeReference entryTypeRef = entry.getTypeRef();
+        if (entryTypeRef != null) {
+            return context.expressionTypingServices.getTypeResolver().resolveType(context.scope, entryTypeRef, context.trace, true);
+        }
+        else {
+            return TypeUtils.NO_EXPECTED_TYPE;
+        }
     }
 }

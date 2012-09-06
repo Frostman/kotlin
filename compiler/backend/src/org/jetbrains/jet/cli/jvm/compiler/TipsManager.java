@@ -51,12 +51,15 @@ public final class TipsManager {
     }
 
     @NotNull
-    public static Collection<DeclarationDescriptor> getReferenceVariants(JetSimpleNameExpression expression, BindingContext context) {
+    public static Collection<DeclarationDescriptor> getReferenceVariants(
+            @NotNull final JetSimpleNameExpression expression,
+            @NotNull final BindingContext context
+    ) {
         JetExpression receiverExpression = expression.getReceiverExpression();
         if (receiverExpression != null) {
             // Process as call expression
-            final JetScope resolutionScope = context.get(BindingContext.RESOLUTION_SCOPE, expression);
-            final JetType expressionType = context.get(BindingContext.EXPRESSION_TYPE, receiverExpression);
+            JetScope resolutionScope = context.get(BindingContext.RESOLUTION_SCOPE, expression);
+            JetType expressionType = context.get(BindingContext.EXPRESSION_TYPE, receiverExpression);
 
             if (expressionType != null && resolutionScope != null) {
                 if (!(expressionType instanceof NamespaceType)) {
@@ -100,7 +103,7 @@ public final class TipsManager {
             else {
                 Collection<DeclarationDescriptor> descriptorsSet = Sets.newHashSet();
 
-                ArrayList<ReceiverDescriptor> result = new ArrayList<ReceiverDescriptor>();
+                List<ReceiverDescriptor> result = new ArrayList<ReceiverDescriptor>();
                 resolutionScope.getImplicitReceiversHierarchy(result);
 
                 for (ReceiverDescriptor receiverDescriptor : result) {
@@ -116,7 +119,10 @@ public final class TipsManager {
     }
 
     @NotNull
-    public static Collection<DeclarationDescriptor> getReferenceVariants(JetNamespaceHeader expression, BindingContext context) {
+    public static Collection<DeclarationDescriptor> getPackageReferenceVariants(
+            JetSimpleNameExpression expression,
+            BindingContext context
+    ) {
         JetScope resolutionScope = context.get(BindingContext.RESOLUTION_SCOPE, expression);
         if (resolutionScope != null) {
             return excludeNonPackageDescriptors(resolutionScope.getAllDescriptors());
@@ -125,8 +131,9 @@ public final class TipsManager {
         return Collections.emptyList();
     }
 
-    public static Collection<DeclarationDescriptor> excludePrivateDescriptors(
-            @NotNull Collection<DeclarationDescriptor> descriptors) {
+    private static Collection<DeclarationDescriptor> excludePrivateDescriptors(
+            @NotNull Collection<DeclarationDescriptor> descriptors
+    ) {
 
         return Collections2.filter(descriptors, new Predicate<DeclarationDescriptor>() {
             @Override
@@ -145,7 +152,7 @@ public final class TipsManager {
     ) {
         final Set<DeclarationDescriptor> descriptorsSet = Sets.newHashSet(descriptors);
 
-        final ArrayList<ReceiverDescriptor> result = new ArrayList<ReceiverDescriptor>();
+        final List<ReceiverDescriptor> result = new ArrayList<ReceiverDescriptor>();
         scope.getImplicitReceiversHierarchy(result);
 
         descriptorsSet.removeAll(
@@ -166,9 +173,10 @@ public final class TipsManager {
 
         return Lists.newArrayList(descriptorsSet);
     }
-    
+
     private static Collection<DeclarationDescriptor> excludeNonPackageDescriptors(
-            @NotNull Collection<DeclarationDescriptor> descriptors) {
+            @NotNull Collection<DeclarationDescriptor> descriptors
+    ) {
         return Collections2.filter(descriptors, new Predicate<DeclarationDescriptor>() {
             @Override
             public boolean apply(DeclarationDescriptor declarationDescriptor) {
@@ -192,12 +200,12 @@ public final class TipsManager {
 
         descriptorsSet.addAll(
                 Collections2.filter(JetScopeUtils.getAllExtensions(externalScope),
-                                                  new Predicate<CallableDescriptor>() {
-                                                      @Override
-                                                      public boolean apply(CallableDescriptor callableDescriptor) {
-                                                          return ExpressionTypingUtils.checkIsExtensionCallable(receiverDescriptor, callableDescriptor);
-                                                      }
-                                                  }));
+                                    new Predicate<CallableDescriptor>() {
+                                        @Override
+                                        public boolean apply(CallableDescriptor callableDescriptor) {
+                                            return ExpressionTypingUtils.checkIsExtensionCallable(receiverDescriptor, callableDescriptor);
+                                        }
+                                    }));
 
         return descriptorsSet;
     }

@@ -20,6 +20,7 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.intellij.openapi.util.io.FileUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.jet.codegen.PropertyCodegen;
@@ -125,9 +126,10 @@ public class NamespaceComparator {
 
         //deferred.assertTrue("namespace " + nsa.getName() + " is empty", !nsa.getMemberScope().getAllDescriptors().isEmpty());
 
-        Set<Name> classifierNames = new HashSet<Name>();
-        Set<Name> propertyNames = new HashSet<Name>();
-        Set<Name> functionNames = new HashSet<Name>();
+        Set<Name> classifierNames = Sets.newHashSet();
+        Set<Name> propertyNames = Sets.newHashSet();
+        Set<Name> functionNames = Sets.newHashSet();
+        Set<Name> objectNames = Sets.newHashSet();
 
         for (DeclarationDescriptor ad : nsa.getMemberScope().getAllDescriptors()) {
             if (ad instanceof ClassifierDescriptor) {
@@ -162,11 +164,23 @@ public class NamespaceComparator {
             }
         }
 
+        for (ClassDescriptor objectDescriptor : nsa.getMemberScope().getObjectDescriptors()) {
+            objectNames.add(objectDescriptor.getName());
+        }
+
         for (Name name : sorted(classifierNames)) {
             ClassifierDescriptor ca = nsa.getMemberScope().getClassifier(name);
             ClassifierDescriptor cb = nsb.getMemberScope().getClassifier(name);
             deferred.assertTrue("Classifier not found in " + nsa + ": " + name, ca != null);
             deferred.assertTrue("Classifier not found in " + nsb + ": " + name, cb != null);
+            compareClassifiers(ca, cb, sb);
+        }
+
+        for (Name name : sorted(objectNames)) {
+            ClassifierDescriptor ca = nsa.getMemberScope().getObjectDescriptor(name);
+            ClassifierDescriptor cb = nsb.getMemberScope().getObjectDescriptor(name);
+            deferred.assertTrue("Object not found in " + nsa + ": " + name, ca != null);
+            deferred.assertTrue("Object not found in " + nsb + ": " + name, cb != null);
             compareClassifiers(ca, cb, sb);
         }
 
@@ -520,7 +534,7 @@ public class NamespaceComparator {
         public void serialize(AnnotationDescriptor annotation) {
             new TypeSerializer(sb).serialize(annotation.getType());
             sb.append("(");
-            serializeCommaSeparated(annotation.getValueArguments());
+            serializeCommaSeparated(DescriptorUtils.getSortedValueArguments(annotation));
             sb.append(")");
         }
 
@@ -729,6 +743,12 @@ public class NamespaceComparator {
                 memberStrings.add(memberSb.toString());
             }
 
+            for (DeclarationDescriptor object : memberScope.getObjectDescriptors()) {
+                StringBuilder objectSb = new StringBuilder();
+                new FullContentSerialier(objectSb).serialize(object);
+                memberStrings.add(objectSb.toString());
+            }
+
             Collections.sort(memberStrings, new MemberComparator());
 
             for (String memberString : memberStrings) {
@@ -759,7 +779,7 @@ public class NamespaceComparator {
 
         @Override
         public void serialize(ClassKind kind) {
-            assert kind == ClassKind.OBJECT : "Must be called for class objects only";
+            assert kind == ClassKind.CLASS_OBJECT : "Must be called for class objects only";
             sb.append("class object");
         }
     }

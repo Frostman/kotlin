@@ -23,7 +23,7 @@ public final class IntRange implements Range<Integer>, IntIterable {
     private final int start;
     private final int count;
 
-    public static final IntRange empty = new IntRange(0,0);
+    public static final IntRange EMPTY = new IntRange(0,0);
 
     public IntRange(int startValue, int count) {
         this.start = startValue;
@@ -32,10 +32,14 @@ public final class IntRange implements Range<Integer>, IntIterable {
 
     @Override
     public String toString() {
-        if (count >= 0) {
-            return getStart() + ".upto(" + getEnd() + ")";
-        } else {
-            return getStart() + ".downto(" + getEnd() + ")";
+        if (count == 0) {
+            return "<empty range>";
+        }
+        else if (count > 0) {
+            return getStart() + ".rangeTo(" + getEnd() + ")";
+        }
+        else {
+            return getStart() + ".downTo(" + getEnd() + ")";
         }
     }
 
@@ -77,9 +81,9 @@ public final class IntRange implements Range<Integer>, IntIterable {
 
     public IntIterator step(int step) {
         if (step < 0)
-            return new MyIterator(getEnd(), -count, -step);
+            return new IntIteratorImpl(getEnd(), -count, -step);
         else
-            return new MyIterator(start, count, step);
+            return new IntIteratorImpl(start, count, step);
     }
 
     public boolean getIsReversed() {
@@ -102,27 +106,23 @@ public final class IntRange implements Range<Integer>, IntIterable {
         return count < 0 ? -count : count;
     }
 
-    public IntRange minus() {
-        return new IntRange(getEnd(), -count);
-    }
-
     @Override
     public IntIterator iterator() {
-        return new MyIterator(start, count, 1);
+        return new IntIteratorImpl(start, count, 1);
     }
 
     public static IntRange count(int length) {
         return new IntRange(0, length);
     }
 
-    private static class MyIterator extends IntIterator {
+    private static class IntIteratorImpl extends IntIterator {
         private int cur;
         private int step;
         private int count;
 
         private final boolean reversed;
 
-        public MyIterator(int startValue, int count, int step) {
+        public IntIteratorImpl(int startValue, int count, int step) {
             cur = startValue;
             this.step = step;
             if (count < 0) {
@@ -137,7 +137,7 @@ public final class IntRange implements Range<Integer>, IntIterable {
         }
 
         @Override
-        public boolean getHasNext() {
+        public boolean hasNext() {
             return count > 0;
         }
 

@@ -23,9 +23,24 @@ public final class DoubleRange implements Range<Double> {
     private final double start;
     private final double size;
 
+    public static final DoubleRange EMPTY = new DoubleRange(0, 0);
+
     public DoubleRange(double startValue, double size) {
         this.start = startValue;
         this.size = size;
+    }
+
+    @Override
+    public String toString() {
+        if (size == 0.0) {
+            return "<empty range>";
+        }
+        else if (size > 0) {
+            return getStart() + ".rangeTo(" + getEnd() + ")";
+        }
+        else {
+            return getStart() + ".downTo(" + getEnd() + ")";
+        }
     }
 
     @Override
@@ -64,9 +79,9 @@ public final class DoubleRange implements Range<Double> {
 
     public DoubleIterator step(double step) {
         if (step < 0)
-            return new MyIterator(getEnd(), -size, -step);
+            return new DoubleIteratorImpl(getEnd(), -size, -step);
         else
-            return new MyIterator(start, size, step);
+            return new DoubleIteratorImpl(start, size, step);
     }
 
     public boolean getIsReversed() {
@@ -85,22 +100,18 @@ public final class DoubleRange implements Range<Double> {
         return size < 0 ? -size : size;
     }
 
-    public DoubleRange minus() {
-        return new DoubleRange(getEnd(), -size);
-    }
-
     public static DoubleRange count(int length) {
         return new DoubleRange(0, length);
     }
 
-    private static class MyIterator extends DoubleIterator {
-        private double cur;
-        private double step;
+    private static class DoubleIteratorImpl extends DoubleIterator {
+        private final double step;
         private final double end;
+        private double cur;
 
         private final boolean reversed;
 
-        public MyIterator(double startValue, double size, double step) {
+        public DoubleIteratorImpl(double startValue, double size, double step) {
             cur = startValue;
             this.step = step;
             if (size < 0) {
@@ -115,7 +126,7 @@ public final class DoubleRange implements Range<Double> {
         }
 
         @Override
-        public boolean getHasNext() {
+        public boolean hasNext() {
             if (reversed)
                 return cur >= end;
             else

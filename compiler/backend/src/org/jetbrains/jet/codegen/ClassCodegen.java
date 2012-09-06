@@ -16,72 +16,79 @@
 
 package org.jetbrains.jet.codegen;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.jet.codegen.context.CodegenContext;
+import org.jetbrains.jet.codegen.state.GenerationState;
+import org.jetbrains.jet.codegen.state.GenerationStateAware;
 import org.jetbrains.jet.lang.descriptors.ClassDescriptor;
 import org.jetbrains.jet.lang.descriptors.DeclarationDescriptor;
 import org.jetbrains.jet.lang.psi.*;
 import org.jetbrains.jet.lang.resolve.BindingContext;
 
-import javax.inject.Inject;
-import java.util.HashMap;
+import java.util.Map;
+
+import static org.jetbrains.jet.codegen.binding.CodegenBinding.enumEntryNeedSubclass;
 
 /**
  * @author max
  * @author alex.tkachman
  */
-public class ClassCodegen {
-    private GenerationState state;
-    private JetTypeMapper jetTypeMapper;
-
-
-    @Inject
-    public void setState(GenerationState state) {
-        this.state = state;
+public class ClassCodegen extends GenerationStateAware {
+    public ClassCodegen(@NotNull GenerationState state) {
+        super(state);
     }
-
-    @Inject
-    public void setJetTypeMapper(JetTypeMapper jetTypeMapper) {
-        this.jetTypeMapper = jetTypeMapper;
-    }
-
 
     public void generate(CodegenContext context, JetClassOrObject aClass) {
         ClassDescriptor descriptor = state.getBindingContext().get(BindingContext.CLASS, aClass);
-        ClassBuilder classBuilder = state.forClassImplementation(descriptor);
+        ClassBuilder classBuilder = state.getFactory().forClassImplementation(descriptor);
 
-        final CodegenContext contextForInners = context.intoClass(descriptor, OwnerKind.IMPLEMENTATION, jetTypeMapper);
+        final CodegenContext contextForInners = context.intoClass(descriptor, OwnerKind.IMPLEMENTATION, state);
 
         if (state.getClassBuilderMode() == ClassBuilderMode.SIGNATURES) {
             // Outer class implementation must happen prior inner classes so we get proper scoping tree in JetLightClass's delegate
             // The same code is present below for the case when we generate real bytecode. This is because the order should be
             // different for the case when we compute closures
-            generateImplementation(context, aClass, OwnerKind.IMPLEMENTATION, contextForInners.accessors, classBuilder);
+            generateImplementation(context, aClass, OwnerKind.IMPLEMENTATION, contextForInners.getAccessors(), classBuilder);
         }
-        
+
         for (JetDeclaration declaration : aClass.getDeclarations()) {
-            if (declaration instanceof JetClass && !(declaration instanceof JetEnumEntry)) {
+            if (declaration instanceof JetClass) {
+                if (declaration instanceof JetEnumEntry && !enumEntryNeedSubclass(
+                        state.getBindingContext(), (JetEnumEntry) declaration)) {
+                    continue;
+                }
+
                 generate(contextForInners, (JetClass) declaration);
             }
             if (declaration instanceof JetClassObject) {
-                generate(contextForInners, ((JetClassObject)declaration).getObjectDeclaration());
+                generate(contextForInners, ((JetClassObject) declaration).getObjectDeclaration());
             }
         }
 
         if (state.getClassBuilderMode() != ClassBuilderMode.SIGNATURES) {
-            generateImplementation(context, aClass, OwnerKind.IMPLEMENTATION, contextForInners.accessors, classBuilder);
+            generateImplementation(context, aClass, OwnerKind.IMPLEMENTATION, contextForInners.getAccessors(), classBuilder);
         }
-        
+
         classBuilder.done();
     }
 
-    private void generateImplementation(CodegenContext context, JetClassOrObject aClass, OwnerKind kind, HashMap<DeclarationDescriptor, DeclarationDescriptor> accessors, ClassBuilder classBuilder) {
+    private void generateImplementation(
+            CodegenContext context,
+            JetClassOrObject aClass,
+            OwnerKind kind,
+            Map<DeclarationDescriptor, DeclarationDescriptor> accessors,
+            ClassBuilder classBuilder
+    ) {
         ClassDescriptor descriptor = state.getBindingContext().get(BindingContext.CLASS, aClass);
-        CodegenContext classContext = context.intoClass(descriptor, kind, jetTypeMapper);
+        CodegenContext classContext = context.intoClass(descriptor, kind, state);
         classContext.copyAccessors(accessors);
+
         new ImplementationBodyCodegen(aClass, classContext, classBuilder, state).generate();
 
-        if (aClass instanceof JetClass && ((JetClass)aClass).isTrait()) {
-            ClassBuilder traitBuilder = state.forTraitImplementation(descriptor);
-            new TraitImplBodyCodegen(aClass, context.intoClass(descriptor, OwnerKind.TRAIT_IMPL, jetTypeMapper), traitBuilder, state).generate();
+        if (aClass instanceof JetClass && ((JetClass) aClass).isTrait()) {
+            ClassBuilder traitBuilder = state.getFactory().forTraitImplementation(descriptor, state);
+            new TraitImplBodyCodegen(aClass, context.intoClass(descriptor, OwnerKind.TRAIT_IMPL, state), traitBuilder, state)
+                    .generate();
             traitBuilder.done();
         }
     }

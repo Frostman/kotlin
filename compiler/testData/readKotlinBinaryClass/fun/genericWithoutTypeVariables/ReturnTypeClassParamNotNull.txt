@@ -1,3 +1,0 @@
-namespace test
-
-internal final fun ffgg(): java.util.List<java.lang.CharSequence>

@@ -20,10 +20,10 @@ import com.intellij.psi.PsiElement;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.asm4.Type;
 import org.jetbrains.asm4.commons.InstructionAdapter;
+import org.jetbrains.jet.codegen.AsmTypeConstants;
 import org.jetbrains.jet.codegen.ExpressionCodegen;
-import org.jetbrains.jet.codegen.GenerationState;
-import org.jetbrains.jet.codegen.JetTypeMapper;
 import org.jetbrains.jet.codegen.StackValue;
+import org.jetbrains.jet.codegen.state.GenerationState;
 import org.jetbrains.jet.lang.descriptors.ClassDescriptor;
 import org.jetbrains.jet.lang.descriptors.FunctionDescriptor;
 import org.jetbrains.jet.lang.psi.JetCallExpression;
@@ -31,7 +31,7 @@ import org.jetbrains.jet.lang.psi.JetExpression;
 import org.jetbrains.jet.lang.psi.JetSimpleNameExpression;
 import org.jetbrains.jet.lang.resolve.BindingContext;
 import org.jetbrains.jet.lang.resolve.java.JvmPrimitiveType;
-import org.jetbrains.jet.lang.types.lang.JetStandardLibraryNames;
+import org.jetbrains.jet.lang.types.lang.JetStandardLibrary;
 import org.jetbrains.jet.lang.types.lang.PrimitiveType;
 
 import java.util.List;
@@ -41,14 +41,24 @@ import java.util.List;
  */
 public class ArrayIterator implements IntrinsicMethod {
     @Override
-    public StackValue generate(ExpressionCodegen codegen, InstructionAdapter v, @NotNull Type expectedType, PsiElement element, List<JetExpression> arguments, StackValue receiver, @NotNull GenerationState state) {
-        receiver.put(JetTypeMapper.TYPE_OBJECT, v);
+    public StackValue generate(
+            ExpressionCodegen codegen,
+            InstructionAdapter v,
+            @NotNull Type expectedType,
+            PsiElement element,
+            List<JetExpression> arguments,
+            StackValue receiver,
+            @NotNull GenerationState state
+    ) {
+        receiver.put(AsmTypeConstants.OBJECT_TYPE, v);
         JetCallExpression call = (JetCallExpression) element;
-        FunctionDescriptor funDescriptor = (FunctionDescriptor) codegen.getBindingContext().get(BindingContext.REFERENCE_TARGET, (JetSimpleNameExpression) call.getCalleeExpression());
+        FunctionDescriptor funDescriptor = (FunctionDescriptor) codegen.getBindingContext()
+                .get(BindingContext.REFERENCE_TARGET, (JetSimpleNameExpression) call.getCalleeExpression());
+        assert funDescriptor != null;
         ClassDescriptor containingDeclaration = (ClassDescriptor) funDescriptor.getContainingDeclaration().getOriginal();
-        if (JetStandardLibraryNames.ARRAY.is(containingDeclaration)) {
-            v.invokestatic("jet/runtime/ArrayIterator", "iterator", "([Ljava/lang/Object;)Ljet/Iterator;");
-            return StackValue.onStack(JetTypeMapper.TYPE_ITERATOR);
+        if (containingDeclaration.equals(JetStandardLibrary.getInstance().getArray())) {
+            v.invokestatic("jet/runtime/ArrayIterator", "iterator", "([Ljava/lang/Object;)Ljava/util/Iterator;");
+            return StackValue.onStack(AsmTypeConstants.JET_ITERATOR_TYPE);
         }
         else {
             for (JvmPrimitiveType jvmPrimitiveType : JvmPrimitiveType.values()) {

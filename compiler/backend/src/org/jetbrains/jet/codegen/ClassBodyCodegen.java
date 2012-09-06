@@ -17,30 +17,31 @@
 package org.jetbrains.jet.codegen;
 
 import org.jetbrains.asm4.MethodVisitor;
-import org.jetbrains.asm4.Opcodes;
 import org.jetbrains.asm4.Type;
 import org.jetbrains.asm4.commons.InstructionAdapter;
+import org.jetbrains.jet.codegen.context.CodegenContext;
+import org.jetbrains.jet.codegen.state.GenerationState;
+import org.jetbrains.jet.codegen.state.GenerationStateAware;
+import org.jetbrains.jet.codegen.state.JetTypeMapperMode;
 import org.jetbrains.jet.lang.descriptors.ClassDescriptor;
 import org.jetbrains.jet.lang.descriptors.PropertyDescriptor;
 import org.jetbrains.jet.lang.psi.*;
 import org.jetbrains.jet.lang.resolve.BindingContext;
-import org.jetbrains.jet.lang.types.lang.JetStandardLibrary;
+import org.jetbrains.jet.lang.resolve.DescriptorUtils;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import static org.jetbrains.asm4.Opcodes.ACC_ABSTRACT;
-import static org.jetbrains.asm4.Opcodes.ACC_PRIVATE;
-import static org.jetbrains.asm4.Opcodes.ACC_PUBLIC;
+import static org.jetbrains.asm4.Opcodes.*;
+import static org.jetbrains.jet.codegen.CodegenUtil.generateMethodThrow;
+import static org.jetbrains.jet.codegen.CodegenUtil.getVisibilityAccessFlag;
 
 /**
  * @author max
  * @author yole
  */
-public abstract class ClassBodyCodegen {
-    protected final GenerationState state;
-
+public abstract class ClassBodyCodegen extends GenerationStateAware {
     protected final JetClassOrObject myClass;
     protected final OwnerKind kind;
     protected final ClassDescriptor descriptor;
@@ -49,8 +50,8 @@ public abstract class ClassBodyCodegen {
 
     protected final List<CodeChunk> staticInitializerChunks = new ArrayList<CodeChunk>();
 
-    public ClassBodyCodegen(JetClassOrObject aClass, CodegenContext context, ClassBuilder v, GenerationState state) {
-        this.state = state;
+    protected ClassBodyCodegen(JetClassOrObject aClass, CodegenContext context, ClassBuilder v, GenerationState state) {
+        super(state);
         descriptor = state.getBindingContext().get(BindingContext.CLASS, aClass);
         myClass = aClass;
         this.context = context;
@@ -66,6 +67,8 @@ public abstract class ClassBodyCodegen {
         generateSyntheticParts();
 
         generateStaticInitializer();
+
+        generateRemoveInIterator();
     }
 
     protected abstract void generateDeclaration();
@@ -75,7 +78,7 @@ public abstract class ClassBodyCodegen {
 
     private void generateClassBody() {
         final FunctionCodegen functionCodegen = new FunctionCodegen(context, v, state);
-        final PropertyCodegen propertyCodegen = new PropertyCodegen(context, v, functionCodegen, state);
+        final PropertyCodegen propertyCodegen = new PropertyCodegen(context, v, functionCodegen);
 
         for (JetDeclaration declaration : myClass.getDeclarations()) {
             generateDeclaration(propertyCodegen, declaration, functionCodegen);
@@ -86,42 +89,27 @@ public abstract class ClassBodyCodegen {
 
     protected void generateDeclaration(PropertyCodegen propertyCodegen, JetDeclaration declaration, FunctionCodegen functionCodegen) {
         if (declaration instanceof JetProperty || declaration instanceof JetNamedFunction) {
-            state.getInjector().getMemberCodegen().generateFunctionOrProperty(
-                    (JetTypeParameterListOwner) declaration, context, v);
+            state.getMemberCodegen().generateFunctionOrProperty((JetTypeParameterListOwner) declaration, context, v);
         }
     }
 
     private void generatePrimaryConstructorProperties(PropertyCodegen propertyCodegen, JetClassOrObject origin) {
-        boolean isAnnotation = origin instanceof JetClass && ((JetClass)origin).isAnnotation();
-        OwnerKind kind = context.getContextKind();
+        boolean isAnnotation = origin instanceof JetClass && ((JetClass) origin).isAnnotation();
         for (JetParameter p : getPrimaryConstructorParameters()) {
             if (p.getValOrVarNode() != null) {
                 PropertyDescriptor propertyDescriptor = state.getBindingContext().get(BindingContext.PRIMARY_CONSTRUCTOR_PARAMETER, p);
                 if (propertyDescriptor != null) {
                     if (!isAnnotation) {
-                        int accessModifiers = JetTypeMapper.getAccessModifiers(propertyDescriptor, 0);
-                        if((accessModifiers & ACC_PRIVATE) == 0) {
-                            propertyCodegen.generateDefaultGetter(propertyDescriptor, accessModifiers, p);
-                            if (propertyDescriptor.isVar()) {
-                                propertyCodegen.generateDefaultSetter(propertyDescriptor, accessModifiers, origin);
-                            }
-                        }
-
-                        //noinspection ConstantConditions
-                        if (!(kind instanceof OwnerKind.DelegateKind) && state.getBindingContext().get(BindingContext.BACKING_FIELD_REQUIRED, propertyDescriptor)) {
-                            int modifiers = accessModifiers;
-                            if (!propertyDescriptor.isVar()) {
-                                modifiers |= Opcodes.ACC_FINAL;
-                            }
-                            if (JetStandardLibrary.isVolatile(propertyDescriptor)) {
-                                modifiers |= Opcodes.ACC_VOLATILE;
-                            }
-                            Type type = state.getInjector().getJetTypeMapper().mapType(propertyDescriptor.getType(), MapTypeMode.VALUE);
-                            v.newField(p, modifiers, p.getName(), type.getDescriptor(), null, null);
+                        propertyCodegen.generateBackingField(p, propertyDescriptor);
+                        propertyCodegen
+                                .generateDefaultGetter(propertyDescriptor, getVisibilityAccessFlag(propertyDescriptor), p);
+                        if (propertyDescriptor.isVar()) {
+                            propertyCodegen
+                                    .generateDefaultSetter(propertyDescriptor, getVisibilityAccessFlag(propertyDescriptor), p);
                         }
                     }
                     else {
-                        Type type = state.getInjector().getJetTypeMapper().mapType(propertyDescriptor.getType(), MapTypeMode.VALUE);
+                        Type type = state.getTypeMapper().mapType(propertyDescriptor.getType(), JetTypeMapperMode.VALUE);
                         v.newMethod(p, ACC_PUBLIC | ACC_ABSTRACT, p.getName(), "()" + type.getDescriptor(), null, null);
                     }
                 }
@@ -138,7 +126,7 @@ public abstract class ClassBodyCodegen {
 
     private void generateStaticInitializer() {
         if (staticInitializerChunks.size() > 0) {
-            final MethodVisitor mv = v.newMethod(null, ACC_PUBLIC | Opcodes.ACC_STATIC,"<clinit>", "()V", null, null);
+            final MethodVisitor mv = v.newMethod(null, ACC_PUBLIC | ACC_STATIC, "<clinit>", "()V", null, null);
             if (state.getClassBuilderMode() == ClassBuilderMode.FULL) {
                 mv.visitCode();
 
@@ -148,9 +136,17 @@ public abstract class ClassBodyCodegen {
                     chunk.generate(v);
                 }
 
-                mv.visitInsn(Opcodes.RETURN);
+                mv.visitInsn(RETURN);
                 FunctionCodegen.endVisit(v, "static initializer", myClass);
             }
+        }
+    }
+
+    private void generateRemoveInIterator() {
+        // generates stub 'remove' function for subclasses of Iterator to be compatible with java.util.Iterator
+        if (DescriptorUtils.isIteratorWithoutRemoveImpl(descriptor)) {
+            final MethodVisitor mv = v.getVisitor().visitMethod(ACC_PUBLIC, "remove", "()V", null, null);
+            generateMethodThrow(mv, "java/lang/UnsupportedOperationException", "Mutating method called on a Kotlin Iterator");
         }
     }
 }

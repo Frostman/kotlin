@@ -49,14 +49,14 @@ public class JetClassPresenter implements ItemPresentationProvider<JetClass> {
             public String getLocationString() {
                 FqName name = JetPsiUtil.getFQName(item);
                 if (name != null) {
-                    return name.toString();
+                    return "(" + name.parent().toString() + ")";
                 }
 
-                return "";
+                return null;
             }
 
             @Override
-            public Icon getIcon(boolean open) {
+            public Icon getIcon(boolean unused) {
                 return JetIconProvider.INSTANCE.getIcon(item, 0);
             }
         };

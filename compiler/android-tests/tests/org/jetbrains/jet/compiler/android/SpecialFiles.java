@@ -37,7 +37,7 @@ public class SpecialFiles {
         fillFilesCompiledWithoutStdLib();
         fillFilesCompiledWithJUnit();
     }
-
+        
     public static Set<String> getFilesCompiledWithJUnit() {
         return filesCompiledWithJUnit;
     }
@@ -49,15 +49,15 @@ public class SpecialFiles {
     public static Set<String> getFilesCompiledWithoutStdLib() {
         return filesCompiledWithoutStdLib;
     }
-    
+
     private static void fillFilesCompiledWithJUnit() {
         filesCompiledWithJUnit.add("kt2334.kt");
     }
 
     private static void fillFilesCompiledWithoutStdLib() {
+        filesCompiledWithoutStdLib.add("kt1980.kt");
         filesCompiledWithoutStdLib.add("kt1953_class.kt"); // Exception in code
         filesCompiledWithoutStdLib.add("basicmethodSuperClass.jet"); // Exception in code
-        filesCompiledWithoutStdLib.add("kt1980.kt"); // OVERLOAD_RESOLUTION_AMBIGUITY
         filesCompiledWithoutStdLib.add("kt503.jet"); // OVERLOAD_RESOLUTION_AMBIGUITY
         filesCompiledWithoutStdLib.add("kt504.jet"); // OVERLOAD_RESOLUTION_AMBIGUITY
         filesCompiledWithoutStdLib.add("kt772.jet"); // OVERLOAD_RESOLUTION_AMBIGUITY
@@ -70,6 +70,10 @@ public class SpecialFiles {
     private static void fillExcludedFiles() {
         excludedFiles.add("referencesStaticInnerClassMethod.kt"); // Must compile Java files before
         excludedFiles.add("referencesStaticInnerClassMethodL2.kt"); // Must compile Java files before
+        excludedFiles.add("simpleJavaEnum.kt"); // Must compile Java files before
+        excludedFiles.add("simpleJavaEnumWithFunction.kt"); // Must compile Java files before
+        excludedFiles.add("simpleJavaEnumWithStaticImport.kt"); // Must compile Java files before
+        excludedFiles.add("removeInIterator.kt"); // Must compile Java files before
         excludedFiles.add("namespaceQualifiedMethod.jet"); // Cannot change package name
         excludedFiles.add("kt1482_2279.kt"); // Cannot change package name
         excludedFiles.add("kt1482.kt"); // Cannot change package name
@@ -84,17 +88,22 @@ public class SpecialFiles {
         excludedFiles.add("kt1213.kt"); // Commented
         excludedFiles.add("kt882.jet"); // Commented
         excludedFiles.add("kt789.jet"); // Commented
+        excludedFiles.add("enum.kt"); // Commented
+        excludedFiles.add("withclosure.kt"); // Commented
         excludedFiles.add("isTypeParameter.jet"); // Commented
         excludedFiles.add("nullability.jet"); // Commented
         excludedFiles.add("genericFunction.jet"); // Commented
         excludedFiles.add("forwardTypeParameter.jet"); // Commented
         excludedFiles.add("kt259.jet"); // Commented
         excludedFiles.add("classObjectMethod.jet"); // Commented
+        
+        excludedFiles.add("inRangeConditionsInWhen.jet"); // Commented
         excludedFiles.add("kt1592.kt"); // Codegen don't execute blackBoxFile() on it
 
         excludedFiles.add("box.kt");      // MultiFileTest not supported yet
         excludedFiles.add("kt2060_1.kt"); // MultiFileTest not supported yet
         excludedFiles.add("kt2257_1.kt"); // MultiFileTest not supported yet
+        excludedFiles.add("kt1528_1.kt"); // MultiFileTest not supported yet
 
         excludedFiles.add("kt684.jet"); // StackOverflow with StringBuilder (escape())
 

@@ -29,7 +29,6 @@ import org.jetbrains.jet.lang.types.TypeProjection;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Set;
 
 /**
  * @author svtk
@@ -45,7 +44,12 @@ public class WhenChecker {
         ClassDescriptor classDescriptor = (ClassDescriptor) declarationDescriptor;
         if (classDescriptor.getKind() != ClassKind.ENUM_CLASS || classDescriptor.getModality().isOverridable()) return false;
         ClassDescriptor classObjectDescriptor = classDescriptor.getClassObjectDescriptor();
-        assert classObjectDescriptor != null;
+        //TODO: workaround for KT-2619 Exception on using java enum in when.
+        // should provide correct checks for java enums
+        // may be obsolete once java and kotlin enum work the same way
+        if (classObjectDescriptor == null) {
+            return false;
+        }
         JetScope memberScope = classObjectDescriptor.getMemberScope(Collections.<TypeProjection>emptyList());
         Collection<ClassDescriptor> objectDescriptors = memberScope.getObjectDescriptors();
         boolean isExhaust = true;
@@ -66,9 +70,7 @@ public class WhenChecker {
         for (JetWhenEntry whenEntry : whenExpression.getEntries()) {
             for (JetWhenCondition condition : whenEntry.getConditions()) {
                 if (condition instanceof JetWhenConditionWithExpression) {
-                    JetExpressionPattern pattern = ((JetWhenConditionWithExpression) condition).getPattern();
-                    if (pattern == null) continue;
-                    JetExpression patternExpression = pattern.getExpression();
+                    JetExpression patternExpression = ((JetWhenConditionWithExpression) condition).getExpression();
                     JetType type = trace.get(BindingContext.EXPRESSION_TYPE, patternExpression);
                     if (type == null) continue;
                     if (type.getConstructor().getDeclarationDescriptor() == enumEntry) {

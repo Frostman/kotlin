@@ -19,7 +19,6 @@ package org.jetbrains.jet.plugin.completion;
 import com.google.common.base.Function;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.Lists;
-import com.intellij.codeInsight.CommentUtil;
 import com.intellij.codeInsight.completion.*;
 import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.codeInsight.lookup.LookupElementBuilder;
@@ -32,10 +31,12 @@ import com.intellij.psi.filters.*;
 import com.intellij.psi.filters.position.FilterPattern;
 import com.intellij.psi.filters.position.LeftNeighbour;
 import com.intellij.psi.filters.position.PositionElementFilter;
+import com.intellij.psi.filters.position.SuperParentFilter;
 import com.intellij.psi.impl.source.tree.LeafPsiElement;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.util.ArrayUtil;
 import com.intellij.util.ProcessingContext;
+import com.intellij.util.codeInsight.CommentUtilCore;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.jet.lang.psi.*;
 import org.jetbrains.jet.lexer.JetToken;
@@ -104,7 +105,7 @@ public class JetKeywordCompletionContributor extends CompletionContributor {
                 return false;
             }
 
-            return CommentUtil.isComment((PsiElement) element);
+            return CommentUtilCore.isComment((PsiElement) element);
         }
 
         @Override
@@ -263,7 +264,7 @@ public class JetKeywordCompletionContributor extends CompletionContributor {
             elements = Collections2.transform(elementsList, new Function<String, LookupElement>() {
                 @Override
                 public LookupElement apply(String keyword) {
-                    final LookupElementBuilder lookupElementBuilder = LookupElementBuilder.create(keyword).setBold();
+                    final LookupElementBuilder lookupElementBuilder = LookupElementBuilder.create(keyword).bold();
 
                     if (keyword.contains("<#<")) {
                         return JetTemplateInsertHandler.lookup(keyword);
@@ -293,6 +294,10 @@ public class JetKeywordCompletionContributor extends CompletionContributor {
                                         OPEN_KEYWORD, PACKAGE_KEYWORD, PRIVATE_KEYWORD,
                                         PROTECTED_KEYWORD, PUBLIC_KEYWORD, SET_KEYWORD,
                                         TYPE_KEYWORD);
+
+        registerScopeKeywordsCompletion(new SuperParentFilter(new ClassFilter(JetModifierList.class)),
+                                        ABSTRACT_KEYWORD, FINAL_KEYWORD, INLINE_KEYWORD, INTERNAL_KEYWORD,
+                                        OPEN_KEYWORD, PRIVATE_KEYWORD, PROTECTED_KEYWORD, PUBLIC_KEYWORD);
 
         registerScopeKeywordsCompletion(new InClassBodyFilter(),
                                         ABSTRACT_KEYWORD,

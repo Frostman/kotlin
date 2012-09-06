@@ -38,6 +38,8 @@ public class FqName extends FqNameBase {
 
     public FqName(@NotNull String fqName) {
         this.fqName = new FqNameUnsafe(fqName, this);
+
+        validateFqName();
     }
 
     public FqName(@NotNull FqNameUnsafe fqName) {
@@ -60,7 +62,7 @@ public class FqName extends FqNameBase {
         }
     }
 
-    private static boolean isValidAfterUnsafeCheck(@NotNull String qualifiedName) {
+    /*package*/ static boolean isValidAfterUnsafeCheck(@NotNull String qualifiedName) {
         // TODO: There's a valid name with escape char ``
         return qualifiedName.indexOf('<') < 0;
     }
@@ -71,6 +73,7 @@ public class FqName extends FqNameBase {
                isValidAfterUnsafeCheck(qualifiedName);
     }
 
+    @Override
     @NotNull
     public String getFqName() {
         return fqName.getFqName();
@@ -141,7 +144,6 @@ public class FqName extends FqNameBase {
     public boolean lastSegmentIs(@NotNull Name segment) {
         return fqName.lastSegmentIs(segment);
     }
-
 
 
     @NotNull

@@ -20,7 +20,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.intellij.psi.*;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.lang.descriptors.ClassDescriptor;
 import org.jetbrains.jet.lang.descriptors.TypeParameterDescriptor;
 import org.jetbrains.jet.lang.descriptors.annotations.AnnotationDescriptor;
@@ -44,7 +43,6 @@ public class JavaTypeTransformer {
 
     private JavaSemanticServices javaSemanticServices;
     private JavaDescriptorResolver resolver;
-
     @Inject
     public void setJavaSemanticServices(JavaSemanticServices javaSemanticServices) {
         this.javaSemanticServices = javaSemanticServices;
@@ -54,12 +52,6 @@ public class JavaTypeTransformer {
     public void setResolver(JavaDescriptorResolver resolver) {
         this.resolver = resolver;
     }
-
-
-
-    private Map<String, JetType> primitiveTypesMap;
-    private Map<FqName, ClassDescriptor> classDescriptorMap;
-
 
     @NotNull
     private TypeProjection transformToTypeProjection(@NotNull final PsiType javaType,
@@ -157,7 +149,8 @@ public class JavaTypeTransformer {
                     // 'L extends List<T>' in Java is a List<T> in Kotlin, not a List<T?>
                     boolean nullable = !EnumSet.of(SUPERTYPE_ARGUMENT, SUPERTYPE).contains(howThisTypeIsUsed);
 
-                    ClassDescriptor classData = getKotlinAnalog(new FqName(psiClass.getQualifiedName()));
+                    ClassDescriptor classData = JavaToKotlinTypesMap.getInstance().getKotlinAnalog(new FqName(psiClass.getQualifiedName()),
+                                                                                        howThisTypeIsUsed);
 
                     if (classData == null) {
                         classData = resolver.resolveClass(new FqName(psiClass.getQualifiedName()), DescriptorSearchRule.INCLUDE_KOTLIN);
@@ -204,7 +197,7 @@ public class JavaTypeTransformer {
             @Override
             public JetType visitPrimitiveType(PsiPrimitiveType primitiveType) {
                 String canonicalText = primitiveType.getCanonicalText();
-                JetType type = getPrimitiveTypesMap().get(canonicalText);
+                JetType type = JavaToKotlinTypesMap.getInstance().getPrimitiveKotlinAnalog(canonicalText);
                 assert type != null : canonicalText;
                 return type;
             }
@@ -213,7 +206,7 @@ public class JavaTypeTransformer {
             public JetType visitArrayType(PsiArrayType arrayType) {
                 PsiType componentType = arrayType.getComponentType();
                 if (componentType instanceof PsiPrimitiveType) {
-                    JetType jetType = getPrimitiveTypesMap().get("[" + componentType.getCanonicalText());
+                    JetType jetType = JavaToKotlinTypesMap.getInstance().getPrimitiveKotlinAnalog("[" + componentType.getCanonicalText());
                     if (jetType != null)
                         return TypeUtils.makeNullable(jetType);
                 }
@@ -236,43 +229,6 @@ public class JavaTypeTransformer {
             }
         });
         return result;
-    }
-
-    public Map<String, JetType> getPrimitiveTypesMap() {
-        if (primitiveTypesMap == null) {
-            primitiveTypesMap = new HashMap<String, JetType>();
-            for (JvmPrimitiveType jvmPrimitiveType : JvmPrimitiveType.values()) {
-                PrimitiveType primitiveType = jvmPrimitiveType.getPrimitiveType();
-                primitiveTypesMap.put(jvmPrimitiveType.getName(), JetStandardLibrary.getInstance().getPrimitiveJetType(primitiveType));
-                primitiveTypesMap.put("[" + jvmPrimitiveType.getName(), JetStandardLibrary.getInstance().getPrimitiveArrayJetType(primitiveType));
-                primitiveTypesMap.put(jvmPrimitiveType.getWrapper().getFqName().getFqName(), JetStandardLibrary.getInstance().getNullablePrimitiveJetType(
-                        primitiveType));
-            }
-            primitiveTypesMap.put("void", JetStandardClasses.getUnitType());
-        }
-        return primitiveTypesMap;
-    }
-
-    public Map<FqName, ClassDescriptor> getClassDescriptorMap() {
-        if (classDescriptorMap == null) {
-            classDescriptorMap = new HashMap<FqName, ClassDescriptor>();
-            for (JvmPrimitiveType jvmPrimitiveType : JvmPrimitiveType.values()) {
-                PrimitiveType primitiveType = jvmPrimitiveType.getPrimitiveType();
-                classDescriptorMap.put(jvmPrimitiveType.getWrapper().getFqName(), JetStandardLibrary.getInstance().getPrimitiveClassDescriptor(primitiveType));
-            }
-            classDescriptorMap.put(new FqName("java.lang.Object"), JetStandardClasses.getAny());
-            classDescriptorMap.put(new FqName("java.lang.String"), JetStandardLibrary.getInstance().getString());
-            classDescriptorMap.put(new FqName("java.lang.CharSequence"), JetStandardLibrary.getInstance().getCharSequence());
-            classDescriptorMap.put(new FqName("java.lang.Throwable"), JetStandardLibrary.getInstance().getThrowable());
-            classDescriptorMap.put(new FqName("java.lang.Number"), JetStandardLibrary.getInstance().getNumber());
-            classDescriptorMap.put(new FqName("java.lang.Comparable"), JetStandardLibrary.getInstance().getComparable());
-        }
-        return classDescriptorMap;
-    }
-
-    @Nullable
-    public ClassDescriptor getKotlinAnalog(@NotNull FqName fqName) {
-        return getClassDescriptorMap().get(fqName);
     }
 
     /**

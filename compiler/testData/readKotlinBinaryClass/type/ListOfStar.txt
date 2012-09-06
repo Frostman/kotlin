@@ -1,3 +1,0 @@
-namespace test
-
-internal final fun listOfStar(): java.util.List<out jet.Any?>

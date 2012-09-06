@@ -17,28 +17,26 @@
 package org.jetbrains.jet.codegen;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.jet.codegen.context.CodegenContext;
+import org.jetbrains.jet.codegen.state.GenerationState;
+import org.jetbrains.jet.codegen.state.GenerationStateAware;
 import org.jetbrains.jet.lang.psi.JetNamedFunction;
 import org.jetbrains.jet.lang.psi.JetProperty;
 import org.jetbrains.jet.lang.psi.JetTypeParameterListOwner;
 
-import javax.inject.Inject;
-
 /**
  * @author Stepan Koltsov
  */
-public class MemberCodegen {
+public class MemberCodegen extends GenerationStateAware {
 
-    @NotNull
-    private GenerationState state;
-
-    @Inject
-    public void setState(@NotNull GenerationState state) {
-        this.state = state;
+    public MemberCodegen(@NotNull GenerationState state) {
+        super(state);
     }
 
-
-    public void generateFunctionOrProperty(@NotNull JetTypeParameterListOwner functionOrProperty,
-            @NotNull CodegenContext context, @NotNull ClassBuilder classBuilder) {
+    public void generateFunctionOrProperty(
+            @NotNull JetTypeParameterListOwner functionOrProperty,
+            @NotNull CodegenContext context, @NotNull ClassBuilder classBuilder
+    ) {
         FunctionCodegen functionCodegen = new FunctionCodegen(context, classBuilder, state);
         if (functionOrProperty instanceof JetNamedFunction) {
             try {
@@ -53,7 +51,7 @@ public class MemberCodegen {
         }
         else if (functionOrProperty instanceof JetProperty) {
             try {
-                new PropertyCodegen(context, classBuilder, functionCodegen, state).gen((JetProperty) functionOrProperty);
+                new PropertyCodegen(context, classBuilder, functionCodegen).gen((JetProperty) functionOrProperty);
             }
             catch (CompilationException e) {
                 throw e;
@@ -66,5 +64,4 @@ public class MemberCodegen {
             throw new IllegalArgumentException("Unknown parameter: " + functionOrProperty);
         }
     }
-
 }

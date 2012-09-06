@@ -22,6 +22,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.jet.lang.ModuleConfiguration;
 import org.jetbrains.jet.lang.descriptors.*;
 import org.jetbrains.jet.lang.diagnostics.Errors;
 import org.jetbrains.jet.lang.psi.*;
@@ -40,16 +41,24 @@ import static org.jetbrains.jet.lang.diagnostics.Errors.*;
 public class QualifiedExpressionResolver {
 
     @NotNull
-    public Collection<? extends DeclarationDescriptor> analyseImportReference(@NotNull JetImportDirective importDirective,
-            @NotNull JetScope scope, @NotNull BindingTrace trace) {
-
-        return processImportReference(importDirective, scope, scope, Importer.DO_NOTHING, trace, false);
+    public Collection<? extends DeclarationDescriptor> analyseImportReference(
+            @NotNull JetImportDirective importDirective,
+            @NotNull JetScope scope,
+            @NotNull BindingTrace trace
+    ) {
+        return processImportReference(importDirective, scope, scope, Importer.DO_NOTHING, trace, null, false);
     }
 
     @NotNull
-    public Collection<? extends DeclarationDescriptor> processImportReference(@NotNull JetImportDirective importDirective,
-            @NotNull JetScope scope, @NotNull JetScope scopeToCheckVisibility, @NotNull Importer importer, @NotNull BindingTrace trace, boolean onlyClasses) {
-
+    public Collection<? extends DeclarationDescriptor> processImportReference(
+            @NotNull JetImportDirective importDirective,
+            @NotNull JetScope scope,
+            @NotNull JetScope scopeToCheckVisibility,
+            @NotNull Importer importer,
+            @NotNull BindingTrace trace,
+            @Nullable ModuleConfiguration moduleConfiguration,
+            boolean onlyClasses
+    ) {
         if (importDirective.isAbsoluteInRootNamespace()) {
             trace.report(UNSUPPORTED.on(importDirective, "TypeHierarchyResolver")); // TODO
             return Collections.emptyList();
@@ -76,7 +85,7 @@ public class QualifiedExpressionResolver {
             }
 
             for (DeclarationDescriptor descriptor : descriptors) {
-                importer.addAllUnderImport(descriptor);
+                importer.addAllUnderImport(descriptor, DescriptorUtils.createIsNotHiddenByKotlinAnalogPredicate(descriptor, moduleConfiguration));
             }
             return Collections.emptyList();
         }
@@ -120,7 +129,7 @@ public class QualifiedExpressionResolver {
         if (descriptor instanceof NamespaceDescriptor) {
             return true;
         }
-        if (descriptor instanceof ClassDescriptor && ((ClassDescriptor)descriptor).getKind() != ClassKind.OBJECT) {
+        if (descriptor instanceof ClassDescriptor && !((ClassDescriptor)descriptor).getKind().isObject()) {
             return true;
         }
         trace.report(CANNOT_IMPORT_FROM_ELEMENT.on(reference, descriptor));
@@ -258,7 +267,7 @@ public class QualifiedExpressionResolver {
 
     @NotNull
     private Collection<? extends DeclarationDescriptor> filterAndStoreResolutionResult(@NotNull Collection<SuccessfulLookupResult> lookupResults,
-            @NotNull JetSimpleNameExpression referenceExpression, @NotNull BindingTrace trace, @NotNull JetScope scopeToCheckVisibility,
+            @NotNull JetSimpleNameExpression referenceExpression, @NotNull final BindingTrace trace, @NotNull JetScope scopeToCheckVisibility,
             boolean onlyClasses, boolean storeResult) {
 
         if (lookupResults.isEmpty()) {
@@ -304,13 +313,15 @@ public class QualifiedExpressionResolver {
                     public boolean apply(@Nullable DeclarationDescriptor descriptor) {
                         return (descriptor instanceof NamespaceDescriptor) ||
                                (descriptor instanceof ClassifierDescriptor) ||
-                               (descriptor instanceof VariableDescriptor && ((VariableDescriptor)descriptor).isObjectDeclaration());
+                               ((descriptor instanceof PropertyDescriptor) &&
+                                (trace.get(BindingContext.OBJECT_DECLARATION_CLASS, ((PropertyDescriptor) descriptor)) != null));
                     }
                 }));
             }
         }
         if (storeResult) {
-            storeResolutionResult(descriptors, filteredDescriptors, referenceExpression, possibleResolutionScopes, trace, scopeToCheckVisibility);
+            storeResolutionResult(descriptors, filteredDescriptors, referenceExpression, possibleResolutionScopes, trace,
+                                  scopeToCheckVisibility);
         }
         return filteredDescriptors;
     }

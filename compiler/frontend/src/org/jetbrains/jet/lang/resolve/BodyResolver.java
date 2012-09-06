@@ -21,6 +21,7 @@ import com.google.common.collect.Sets;
 import com.intellij.psi.PsiElement;
 import com.intellij.util.containers.Queue;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.lang.descriptors.*;
 import org.jetbrains.jet.lang.psi.*;
 import org.jetbrains.jet.lang.resolve.calls.CallMaker;
@@ -110,6 +111,10 @@ public class BodyResolver {
         this.declarationsChecker = declarationsChecker;
     }
 
+    @Inject
+    public void setContext(@NotNull BodiesResolveContext context) {
+        this.context = context;
+    }
 
     private void resolveBehaviorDeclarationBodies(@NotNull BodiesResolveContext bodiesResolveContext) {
         // Initialize context
@@ -131,11 +136,10 @@ public class BodyResolver {
         }
     }
 
-    public void resolveBodies(@NotNull BodiesResolveContext bodiesResolveContext) {
-        resolveBehaviorDeclarationBodies(bodiesResolveContext);
-        controlFlowAnalyzer.process(bodiesResolveContext);
-        declarationsChecker.process(bodiesResolveContext);
-
+    public void resolveBodies() {
+        resolveBehaviorDeclarationBodies(context);
+        controlFlowAnalyzer.process(context);
+        declarationsChecker.process(context);
     }
 
     private void resolveDelegationSpecifierLists() {
@@ -283,6 +287,9 @@ public class BodyResolver {
             ClassDescriptor classDescriptor = TypeUtils.getClassDescriptor(supertype);
             if (classDescriptor != null) {
                 if (classDescriptor.getKind() != ClassKind.TRAIT) {
+                    if (supertypeOwner.getKind() == ClassKind.ENUM_CLASS) {
+                        trace.report(CLASS_IN_SUPERTYPE_FOR_ENUM.on(typeReference));
+                    }
                     if (classAppeared) {
                         trace.report(MANY_CLASSES_IN_SUPERTYPE_LIST.on(typeReference));
                     }
@@ -319,12 +326,18 @@ public class BodyResolver {
     }
 
     private void resolveAnonymousInitializers(JetClassOrObject jetClassOrObject, MutableClassDescriptor classDescriptor) {
-        if (!context.completeAnalysisNeeded(jetClassOrObject)) return;
+        resolveAnonymousInitializers(jetClassOrObject, classDescriptor.getUnsubstitutedPrimaryConstructor(),
+                                     classDescriptor.getScopeForInitializers());
+    }
+
+    public void resolveAnonymousInitializers(JetClassOrObject jetClassOrObject,
+            @Nullable ConstructorDescriptor primaryConstructor,
+            @NotNull JetScope scopeForInitializers) {
+        if (!context.completeAnalysisNeeded(jetClassOrObject)) {
+            return;
+        }
         List<JetClassInitializer> anonymousInitializers = jetClassOrObject.getAnonymousInitializers();
-        if (classDescriptor.getUnsubstitutedPrimaryConstructor() != null) {
-            ConstructorDescriptor primaryConstructor = classDescriptor.getUnsubstitutedPrimaryConstructor();
-            assert primaryConstructor != null;
-            final JetScope scopeForInitializers = classDescriptor.getScopeForInitializers();
+        if (primaryConstructor != null) {
             for (JetClassInitializer anonymousInitializer : anonymousInitializers) {
                 expressionTypingServices.getType(scopeForInitializers, anonymousInitializer.getBody(), NO_EXPECTED_TYPE, DataFlowInfo.EMPTY, trace);
             }
@@ -415,7 +428,7 @@ public class BodyResolver {
         return accessorScope;
     }
 
-    private void resolvePropertyAccessors(JetProperty property, PropertyDescriptor propertyDescriptor) {
+    public void resolvePropertyAccessors(JetProperty property, PropertyDescriptor propertyDescriptor) {
         ObservableBindingTrace fieldAccessTrackingTrace = createFieldTrackingTrace(propertyDescriptor);
 
         JetPropertyAccessor getter = property.getGetter();
@@ -450,20 +463,10 @@ public class BodyResolver {
         });
     }
 
-    private void resolvePropertyInitializer(JetProperty property, PropertyDescriptor propertyDescriptor, JetExpression initializer, JetScope scope) {
-        //JetFlowInformationProvider flowInformationProvider = context.getDescriptorResolver().computeFlowData(property, initializer); // TODO : flow JET-15
-        JetType expectedTypeForInitializer = property.getPropertyTypeRef() != null ? propertyDescriptor.getType() : NO_EXPECTED_TYPE;
+    public void resolvePropertyInitializer(JetProperty property, PropertyDescriptor propertyDescriptor, JetExpression initializer, JetScope scope) {
+        JetType expectedTypeForInitializer = property.getTypeRef() != null ? propertyDescriptor.getType() : NO_EXPECTED_TYPE;
         JetScope propertyDeclarationInnerScope = descriptorResolver.getPropertyDeclarationInnerScope(scope, propertyDescriptor.getTypeParameters(), ReceiverDescriptor.NO_RECEIVER, trace);
-        JetType type = expressionTypingServices.getType(propertyDeclarationInnerScope, initializer, expectedTypeForInitializer, DataFlowInfo.EMPTY, trace);
-//
-//        JetType expectedType = propertyDescriptor.getInType();
-//        if (expectedType == null) {
-//            expectedType = propertyDescriptor.getType();
-//        }
-//        if (type != null && expectedType != null
-//            && !context.getSemanticServices().getTypeChecker().isSubtypeOf(type, expectedType)) {
-////            trace.report(TYPE_MISMATCH.on(initializer, expectedType, type));
-//        }
+        expressionTypingServices.getType(propertyDeclarationInnerScope, initializer, expectedTypeForInitializer, DataFlowInfo.EMPTY, trace);
     }
 
     private void resolveFunctionBodies() {
@@ -482,7 +485,7 @@ public class BodyResolver {
         }
     }
 
-    private void resolveFunctionBody(
+    public void resolveFunctionBody(
             @NotNull BindingTrace trace,
             @NotNull JetDeclarationWithBody function,
             @NotNull FunctionDescriptor functionDescriptor,

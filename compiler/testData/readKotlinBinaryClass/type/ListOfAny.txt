@@ -1,3 +1,0 @@
-namespace test
-
-internal final fun listOfAny(): java.util.List<jet.Any>

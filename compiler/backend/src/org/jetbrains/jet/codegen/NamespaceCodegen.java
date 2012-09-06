@@ -18,10 +18,16 @@ package org.jetbrains.jet.codegen;
 
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.progress.ProcessCanceledException;
-import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiFile;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.asm4.MethodVisitor;
+import org.jetbrains.asm4.Type;
+import org.jetbrains.asm4.commons.InstructionAdapter;
+import org.jetbrains.jet.codegen.binding.CodegenBinding;
+import org.jetbrains.jet.codegen.context.CodegenContext;
+import org.jetbrains.jet.codegen.state.GenerationState;
+import org.jetbrains.jet.codegen.state.GenerationStateAware;
 import org.jetbrains.jet.lang.descriptors.NamespaceDescriptor;
 import org.jetbrains.jet.lang.descriptors.PropertyDescriptor;
 import org.jetbrains.jet.lang.diagnostics.DiagnosticUtils;
@@ -32,11 +38,8 @@ import org.jetbrains.jet.lang.resolve.java.JvmClassName;
 import org.jetbrains.jet.lang.resolve.name.FqName;
 import org.jetbrains.jet.lang.resolve.name.Name;
 import org.jetbrains.jet.utils.Progress;
-import org.jetbrains.asm4.MethodVisitor;
-import org.jetbrains.asm4.Type;
-import org.jetbrains.asm4.commons.InstructionAdapter;
 
-import java.util.ArrayList;
+import java.io.File;
 import java.util.Collection;
 
 import static org.jetbrains.asm4.Opcodes.*;
@@ -44,20 +47,23 @@ import static org.jetbrains.asm4.Opcodes.*;
 /**
  * @author max
  */
-public class NamespaceCodegen {
+public class NamespaceCodegen extends GenerationStateAware {
     @NotNull
     private final ClassBuilderOnDemand v;
     @NotNull private final FqName name;
-    private final GenerationState state;
     private final Collection<JetFile> files;
-    private int nextMultiFile = 0;
 
-    public NamespaceCodegen(@NotNull ClassBuilderOnDemand v, @NotNull final FqName fqName, GenerationState state, Collection<JetFile> namespaceFiles) {
+    public NamespaceCodegen(
+            @NotNull ClassBuilderOnDemand v,
+            @NotNull final FqName fqName,
+            GenerationState state,
+            Collection<JetFile> namespaceFiles
+    ) {
+        super(state);
         checkAllFilesHaveSameNamespace(namespaceFiles);
 
         this.v = v;
         name = fqName;
-        this.state = state;
         this.files = namespaceFiles;
 
         final PsiFile sourceFile = namespaceFiles.iterator().next().getContainingFile();
@@ -77,11 +83,10 @@ public class NamespaceCodegen {
                 v.visitSource(sourceFile.getName(), null);
             }
         });
-
     }
 
     public void generate(CompilationErrorHandler errorHandler, final Progress progress) {
-        boolean multiFile = state.getInjector().getClosureAnnotator().isMultiFileNamespace(name);
+        boolean multiFile = CodegenBinding.isMultiFileNamespace(state.getBindingContext(), name);
 
         for (JetFile file : files) {
             VirtualFile vFile = file.getVirtualFile();
@@ -101,9 +106,10 @@ public class NamespaceCodegen {
                 throw e;
             }
             catch (Throwable e) {
-                if(errorHandler != null) errorHandler.reportException(e, vFile == null ? "no file" : vFile.getUrl());
+                if (errorHandler != null) errorHandler.reportException(e, vFile == null ? "no file" : vFile.getUrl());
                 DiagnosticUtils.throwIfRunningOnServer(e);
                 if (ApplicationManager.getApplication().isInternal()) {
+                    //noinspection CallToPrintStackTrace
                     e.printStackTrace();
                 }
             }
@@ -120,23 +126,23 @@ public class NamespaceCodegen {
         NamespaceDescriptor descriptor = state.getBindingContext().get(BindingContext.FILE_TO_NAMESPACE, file);
         for (JetDeclaration declaration : file.getDeclarations()) {
             if (declaration instanceof JetProperty) {
-                final CodegenContext context = CodegenContexts.STATIC.intoNamespace(descriptor);
-                state.getInjector().getMemberCodegen().generateFunctionOrProperty(
+                final CodegenContext context = CodegenContext.STATIC.intoNamespace(descriptor);
+                state.getMemberCodegen().generateFunctionOrProperty(
                         (JetTypeParameterListOwner) declaration, context, v.getClassBuilder());
             }
             else if (declaration instanceof JetNamedFunction) {
                 if (!multiFile) {
-                    final CodegenContext context = CodegenContexts.STATIC.intoNamespace(descriptor);
-                    state.getInjector().getMemberCodegen().generateFunctionOrProperty(
+                    final CodegenContext context = CodegenContext.STATIC.intoNamespace(descriptor);
+                    state.getMemberCodegen().generateFunctionOrProperty(
                             (JetTypeParameterListOwner) declaration, context, v.getClassBuilder());
                 }
             }
             else if (declaration instanceof JetClassOrObject) {
-                final CodegenContext context = CodegenContexts.STATIC.intoNamespace(descriptor);
-                state.getInjector().getClassCodegen().generate(context, (JetClassOrObject) declaration);
+                final CodegenContext context = CodegenContext.STATIC.intoNamespace(descriptor);
+                state.getClassCodegen().generate(context, (JetClassOrObject) declaration);
             }
             else if (declaration instanceof JetScript) {
-                state.getInjector().getScriptCodegen().generate((JetScript) declaration);
+                state.getScriptCodegen().generate((JetScript) declaration);
             }
         }
 
@@ -150,30 +156,33 @@ public class NamespaceCodegen {
 
             if (k > 0) {
                 PsiFile containingFile = file.getContainingFile();
-                String fname = containingFile.getName();
-                fname = fname.substring(0,fname.lastIndexOf('.'));
-                String className = name.child(Name.identifier("namespace$src$" + fname)).getFqName().replace('.','/');
-                ClassBuilder builder = state.forNamespacepart(className, file);
+                String namespaceInternalName = name.child(Name.identifier(JvmAbi.PACKAGE_CLASS)).getFqName().replace('.', '/');
+                String className = getMultiFileNamespaceInternalName(namespaceInternalName, containingFile);
+                ClassBuilder builder = state.getFactory().forNamespacepart(className);
 
                 builder.defineClass(containingFile, V1_6,
-                              ACC_PUBLIC/*|ACC_SUPER*/,
-                              className,
-                              null,
-                              //"jet/lang/Namespace",
-                              "java/lang/Object",
-                              new String[0]
+                                    ACC_PUBLIC/*|ACC_SUPER*/,
+                                    className,
+                                    null,
+                                    //"jet/lang/Namespace",
+                                    "java/lang/Object",
+                                    new String[0]
                 );
                 builder.visitSource(containingFile.getName(), null);
 
                 for (JetDeclaration declaration : file.getDeclarations()) {
                     if (declaration instanceof JetNamedFunction) {
                         {
-                            final CodegenContext context = CodegenContexts.STATIC.intoNamespace(descriptor);
-                            state.getInjector().getMemberCodegen().generateFunctionOrProperty((JetTypeParameterListOwner) declaration, context, builder);
+                            final CodegenContext context =
+                                    CodegenContext.STATIC.intoNamespace(descriptor);
+                            state.getMemberCodegen()
+                                    .generateFunctionOrProperty((JetTypeParameterListOwner) declaration, context, builder);
                         }
                         {
-                            final CodegenContext context = CodegenContexts.STATIC.intoNamespacePart(className, descriptor);
-                            state.getInjector().getMemberCodegen().generateFunctionOrProperty((JetTypeParameterListOwner) declaration, context, v.getClassBuilder());
+                            final CodegenContext context =
+                                    CodegenContext.STATIC.intoNamespacePart(className, descriptor);
+                            state.getMemberCodegen()
+                                    .generateFunctionOrProperty((JetTypeParameterListOwner) declaration, context, v.getClassBuilder());
                         }
                     }
                 }
@@ -201,7 +210,7 @@ public class NamespaceCodegen {
         return false;
     }
 
-    public static void checkAllFilesHaveSameNamespace(Collection<JetFile> namespaceFiles) {
+    private static void checkAllFilesHaveSameNamespace(Collection<JetFile> namespaceFiles) {
         FqName commonFqName = null;
         for (JetFile file : namespaceFiles) {
             FqName fqName = JetPsiUtil.getFQName(file);
@@ -227,14 +236,15 @@ public class NamespaceCodegen {
                     mv.visitCode();
 
                     FrameMap frameMap = new FrameMap();
-                    ExpressionCodegen codegen = new ExpressionCodegen(mv, frameMap, Type.VOID_TYPE, CodegenContexts.STATIC, state);
+                    ExpressionCodegen codegen = new ExpressionCodegen(mv, frameMap, Type.VOID_TYPE, CodegenContext.STATIC, state);
 
                     for (JetFile file : files) {
                         for (JetDeclaration declaration : file.getDeclarations()) {
                             if (declaration instanceof JetProperty) {
                                 final JetExpression initializer = ((JetProperty) declaration).getInitializer();
                                 if (initializer != null && !(initializer instanceof JetConstantExpression)) {
-                                    final PropertyDescriptor descriptor = (PropertyDescriptor) state.getBindingContext().get(BindingContext.VARIABLE, declaration);
+                                    final PropertyDescriptor descriptor =
+                                            (PropertyDescriptor) state.getBindingContext().get(BindingContext.VARIABLE, declaration);
                                     assert descriptor != null;
                                     codegen.genToJVMStack(initializer);
                                     StackValue.Property propValue = codegen.intermediateValueForProperty(descriptor, true, null);
@@ -260,7 +270,6 @@ public class NamespaceCodegen {
                     if (initializer != null && !(initializer instanceof JetConstantExpression)) {
                         return true;
                     }
-
                 }
             }
         }
@@ -278,5 +287,20 @@ public class NamespaceCodegen {
         }
 
         return JvmClassName.byInternalName(fqName.getFqName().replace('.', '/') + "/" + JvmAbi.PACKAGE_CLASS);
+    }
+
+    @NotNull
+    public static String getMultiFileNamespaceInternalName(String namespaceInternalName, PsiFile file) {
+        String name = file.getName();
+
+        int substringFrom = name.lastIndexOf(File.separator) + 1;
+
+        int substringTo = name.lastIndexOf('.');
+        if (substringTo == -1) {
+            substringTo = name.length();
+        }
+
+        // dollar sign in the end is to prevent synthetic class from having "Test" or other parseable suffix
+        return namespaceInternalName + "$src$" + name.substring(substringFrom, substringTo) + "$";
     }
 }

@@ -16,7 +16,6 @@
 
 package org.jetbrains.jet.codegen;
 
-import jet.Tuple2;
 import org.jetbrains.jet.ConfigurationKind;
 
 import java.lang.reflect.Method;
@@ -77,15 +76,15 @@ public class PatternMatchingTest extends CodegenTestCase {
     }
 
     public void testRange() throws Exception {
-        loadFile();
-//        System.out.println(generateToText());
-        Method foo = generateFunction();
-        assertEquals("array list", foo.invoke(null, 239));
-        assertEquals("digit", foo.invoke(null, 0));
-        assertEquals("digit", foo.invoke(null, 9));
-        assertEquals("digit", foo.invoke(null, 5));
-        assertEquals("something", foo.invoke(null, 19));
-        assertEquals("not small", foo.invoke(null, 190));
+        blackBoxFile("patternMatching/range.jet");
+    }
+
+    public void testLongInRange() throws Exception {
+        blackBoxFile("patternMatching/longInRange.jet");
+    }
+
+    public void testWhenArgumentIsEvaluatedOnlyOnce() throws Exception {
+        blackBoxFile("patternMatching/whenArgumentIsEvaluatedOnlyOnce.kt");
     }
 
     public void testRangeChar() throws Exception {
@@ -97,58 +96,30 @@ public class PatternMatchingTest extends CodegenTestCase {
     }
 
     public void testWildcardPattern() throws Exception {
-        loadText("fun foo(x: String) = when(x) { is * -> \"something\" }");
+        loadText("fun foo(x: String) = when(x) { else -> \"something\" }");
         Method foo = generateFunction();
         assertEquals("something", foo.invoke(null, ""));
     }
 
     public void testNoReturnType() throws Exception {
-        loadText("fun foo(x: String) = when(x) { is * -> \"x\" }");
+        loadText("fun foo(x: String) = when(x) { else -> \"x\" }");
         Method foo = generateFunction();
         assertEquals("x", foo.invoke(null, ""));
     }
 
-    public void testTuplePattern() throws Exception {
-        loadText("fun foo(x: #(Any, Any)) = when(x) { is #(1,2) -> \"one,two\"; else -> \"something\" }");
+    public void testCall() throws Exception {
+        loadText("fun foo(s: String) = when { s[0] == 'J' -> \"JetBrains\"; else -> \"something\" }");
         Method foo = generateFunction();
-        final Object result;
-        try {
-            result = foo.invoke(null, new Tuple2<Integer, Integer>(1, 2));
-        } catch (Exception e) {
-            System.out.println(generateToText());
-            throw e;
-        }
-        assertEquals("one,two", result);
-        assertEquals("something", foo.invoke(null, new Tuple2<String, String>("not", "tuple")));
+        assertEquals("JetBrains", foo.invoke(null, "Java"));
+        assertEquals("something", foo.invoke(null, "C#"));
     }
-
-    // Commented for KT-621
-//    public void testCall() throws Exception {
-//        loadText("fun foo(s: String) = when(s) { .startsWith(\"J\") => \"JetBrains\"; else => \"something\" }");
-//        Method foo = generateFunction();
-//        try {
-//            assertEquals("JetBrains", foo.invoke(null, "Java"));
-//            assertEquals("something", foo.invoke(null, "C#"));
-//        }
-//        catch (Throwable t) {
-//            System.out.println(generateToText());
-//            t.printStackTrace();
-//        }
-//    }
 
     public void testCallProperty() throws Exception {
         blackBoxFile("patternMatching/callProperty.jet");
     }
 
-    public void testNames() throws Exception {
-        loadText("fun foo(x: #(Any, Any)) = when(x) { is #(val a is String, *) -> a; else -> \"something\" }");
-        Method foo = generateFunction();
-        assertEquals("JetBrains", foo.invoke(null, new Tuple2<String, String>("JetBrains", "s.r.o.")));
-        assertEquals("something", foo.invoke(null, new Tuple2<Integer, Integer>(1, 2)));
-    }
-
     public void testMultipleConditions() throws Exception {
-        loadText("fun foo(x: Any) = when(x) { is 0, 1 -> \"bit\"; else -> \"something\" }");
+        loadText("fun foo(x: Any) = when(x) { 0, 1 -> \"bit\"; else -> \"something\" }");
         Method foo = generateFunction();
         assertEquals("bit", foo.invoke(null, 0));
         assertEquals("bit", foo.invoke(null, 1));

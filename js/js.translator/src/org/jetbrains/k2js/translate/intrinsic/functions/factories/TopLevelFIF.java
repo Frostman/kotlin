@@ -16,10 +16,17 @@
 
 package org.jetbrains.k2js.translate.intrinsic.functions.factories;
 
+import com.google.dart.compiler.backend.js.ast.JsExpression;
+import com.google.dart.compiler.backend.js.ast.JsNameRef;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.jetbrains.k2js.translate.context.TranslationContext;
 import org.jetbrains.k2js.translate.intrinsic.functions.basic.BuiltInFunctionIntrinsic;
 import org.jetbrains.k2js.translate.intrinsic.functions.basic.CallStandardMethodIntrinsic;
+import org.jetbrains.k2js.translate.intrinsic.functions.basic.FunctionIntrinsic;
 import org.jetbrains.k2js.translate.intrinsic.functions.patterns.NamePredicate;
+
+import java.util.List;
 
 import static org.jetbrains.k2js.translate.intrinsic.functions.patterns.PatternBuilder.pattern;
 
@@ -28,7 +35,20 @@ import static org.jetbrains.k2js.translate.intrinsic.functions.patterns.PatternB
  */
 public final class TopLevelFIF extends CompositeFIF {
     @NotNull
-    public static final CallStandardMethodIntrinsic EQUALS = new CallStandardMethodIntrinsic("Kotlin.equals", true, 1);
+    public static final CallStandardMethodIntrinsic EQUALS = new CallStandardMethodIntrinsic(new JsNameRef("equals", "Kotlin"), true, 1);
+    @NotNull
+    public static final FunctionIntrinsic RETURN_RECEIVER_INTRINSIC = new FunctionIntrinsic() {
+        @NotNull
+        @Override
+        public JsExpression apply(
+                @Nullable JsExpression receiver,
+                @NotNull List<JsExpression> arguments,
+                @NotNull TranslationContext context
+        ) {
+            assert receiver != null;
+            return receiver;
+        }
+    };
     @NotNull
     public static final FunctionIntrinsicFactory INSTANCE = new TopLevelFIF();
 
@@ -37,6 +57,7 @@ public final class TopLevelFIF extends CompositeFIF {
         add(pattern("equals"), EQUALS);
         add(pattern(NamePredicate.PRIMITIVE_NUMBERS, "equals"), EQUALS);
         add(pattern("String|Boolean|Char|Number.equals"), EQUALS);
-        add(pattern("arrayOfNulls"), new CallStandardMethodIntrinsic("Kotlin.nullArray", false, 1));
+        add(pattern("arrayOfNulls"), new CallStandardMethodIntrinsic(new JsNameRef("nullArray", "Kotlin"), false, 1));
+        add(pattern("iterator"), RETURN_RECEIVER_INTRINSIC);
     }
 }

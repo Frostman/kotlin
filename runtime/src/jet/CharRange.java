@@ -23,11 +23,24 @@ public final class CharRange implements Range<Character>, CharIterable {
     private final char start;
     private final int count;
 
-    public static final CharRange empty = new CharRange((char) 0,0);
+    public static final CharRange EMPTY = new CharRange((char) 0,0);
 
     public CharRange(char startValue, int count) {
         this.start = startValue;
         this.count = count;
+    }
+
+    @Override
+    public String toString() {
+        if (count == 0) {
+            return "<empty range>";
+        }
+        else if (count > 0) {
+            return getStart() + ".rangeTo(" + getEnd() + ")";
+        }
+        else {
+            return getStart() + ".downTo(" + getEnd() + ")";
+        }
     }
 
     @Override
@@ -86,34 +99,30 @@ public final class CharRange implements Range<Character>, CharIterable {
         return count < 0 ? -count : count;
     }
 
-    public CharRange minus() {
-        return new CharRange(getEnd(), -count);
-    }
-
     public CharIterator step(int step) {
         if (step < 0)
-            return new MyIterator(getEnd(), -count, -step);
+            return new CharIteratorImpl(getEnd(), -count, -step);
         else
-            return new MyIterator(start, count, step);
+            return new CharIteratorImpl(start, count, step);
     }
 
     @Override
     public CharIterator iterator() {
-        return new MyIterator(start, count, 1);
+        return new CharIteratorImpl(start, count, 1);
     }
 
     public static CharRange count(int length) {
         return new CharRange((char) 0, length);
     }
 
-    private static class MyIterator extends CharIterator {
+    private static class CharIteratorImpl extends CharIterator {
+        private final int step;
         private char cur;
-        private int step;
         private int count;
 
         private final boolean reversed;
 
-        public MyIterator(char startValue, int count, int step) {
+        public CharIteratorImpl(char startValue, int count, int step) {
             cur = startValue;
             this.step = step;
             if (count < 0) {
@@ -128,7 +137,7 @@ public final class CharRange implements Range<Character>, CharIterable {
         }
 
         @Override
-        public boolean getHasNext() {
+        public boolean hasNext() {
             return count > 0;
         }
 

@@ -81,6 +81,7 @@ public class DefaultErrorMessages {
         MAP.put(REDUNDANT_MODIFIER, "Modifier ''{0}'' is redundant because ''{1}'' is present", TO_STRING, TO_STRING);
         MAP.put(ABSTRACT_MODIFIER_IN_TRAIT, "Modifier ''abstract'' is redundant in trait");
         MAP.put(OPEN_MODIFIER_IN_TRAIT, "Modifier ''open'' is redundant in trait");
+        MAP.put(OPEN_MODIFIER_IN_ENUM, "Modifier ''open'' is not applicable for enum class");
         MAP.put(REDUNDANT_MODIFIER_IN_GETTER, "Visibility modifiers are redundant in getter");
         MAP.put(TRAIT_CAN_NOT_BE_FINAL, "Trait cannot be final");
         MAP.put(TYPECHECKER_HAS_RUN_INTO_RECURSIVE_PROBLEM,
@@ -94,6 +95,7 @@ public class DefaultErrorMessages {
         MAP.put(CANNOT_BE_IMPORTED, "Cannot import ''{0}'', functions and properties can be imported only from packages", NAME);
         MAP.put(USELESS_HIDDEN_IMPORT, "Useless import, it is hidden further");
         MAP.put(USELESS_SIMPLE_IMPORT, "Useless import, does nothing");
+        MAP.put(CLASS_HAS_KOTLIN_ANALOG, "This class has Kotlin analog(s) {0} that should be used instead.", CLASS_DESCRIPTOR_LIST);
 
         MAP.put(CANNOT_INFER_PARAMETER_TYPE,
                 "Cannot infer a type for this parameter. To specify it explicitly use the {(p : Type) => ...} notation");
@@ -112,9 +114,15 @@ public class DefaultErrorMessages {
 
         MAP.put(MANY_FUNCTION_LITERAL_ARGUMENTS, "Only one function literal is allowed outside a parenthesized argument list");
         MAP.put(PROPERTY_WITH_NO_TYPE_NO_INITIALIZER, "This property must either have a type annotation or be initialized");
+        MAP.put(VARIABLE_WITH_NO_TYPE_NO_INITIALIZER, "This variable must either have a type annotation or be initialized");
+
+        MAP.put(INITIALIZER_REQUIRED_FOR_MULTIDECLARATION, "Initializer required for multi-declaration");
+        MAP.put(COMPONENT_FUNCTION_MISSING, "Multi-declaration initializer must have a ''{0}()'' function", TO_STRING);
+        MAP.put(COMPONENT_FUNCTION_AMBIGUITY, "Function ''{0}()'' is ambiguous for this expression: {1}", TO_STRING, AMBIGUOUS_CALLS);
+        MAP.put(COMPONENT_FUNCTION_RETURN_TYPE_MISMATCH, "''{0}()'' function returns ''{1}'', but ''{2}'' is expected",
+                                                                                    TO_STRING, RENDER_TYPE, RENDER_TYPE);
 
         MAP.put(ABSTRACT_PROPERTY_IN_PRIMARY_CONSTRUCTOR_PARAMETERS, "This property cannot be declared abstract");
-        MAP.put(ABSTRACT_PROPERTY_NOT_IN_CLASS, "A property may be abstract only when defined in a class or trait");
         MAP.put(ABSTRACT_PROPERTY_WITH_INITIALIZER, "Property with initializer cannot be abstract");
         MAP.put(ABSTRACT_PROPERTY_WITH_GETTER, "Property with getter implementation cannot be abstract");
         MAP.put(ABSTRACT_PROPERTY_WITH_SETTER, "Property with setter implementation cannot be abstract");
@@ -131,10 +139,9 @@ public class DefaultErrorMessages {
         MAP.put(ABSTRACT_FUNCTION_IN_NON_ABSTRACT_CLASS, "Abstract function ''{0}'' in non-abstract class ''{1}''", NAME, NAME);
         MAP.put(ABSTRACT_FUNCTION_WITH_BODY, "A function ''{0}'' with body cannot be abstract", NAME);
         MAP.put(NON_ABSTRACT_FUNCTION_WITH_NO_BODY, "Function ''{0}'' without a body must be abstract", NAME);
-        MAP.put(NON_MEMBER_ABSTRACT_FUNCTION, "Function ''{0}'' is not a class or trait member and cannot be abstract", NAME);
 
         MAP.put(NON_MEMBER_FUNCTION_NO_BODY, "Function ''{0}'' must have a body", NAME);
-        MAP.put(NON_FINAL_MEMBER_IN_FINAL_CLASS, "Non-final member in a final class");
+        MAP.put(NON_FINAL_MEMBER_IN_FINAL_CLASS, "\"open\" has no effect in a final class");
 
         MAP.put(PUBLIC_MEMBER_SHOULD_SPECIFY_TYPE, "Public or protected member should have specified type");
 
@@ -221,17 +228,16 @@ public class DefaultErrorMessages {
         MAP.put(NO_CLASS_OBJECT, "Please specify constructor invocation; classifier ''{0}'' does not have a class object", NAME);
         MAP.put(NO_GENERICS_IN_SUPERTYPE_SPECIFIER, "Generic arguments of the base type must be specified");
 
-        MAP.put(HAS_NEXT_PROPERTY_AND_FUNCTION_AMBIGUITY,
-                "An ambiguity between 'iterator().hasNext()' function and 'iterator().hasNext' property");
-        MAP.put(HAS_NEXT_MISSING, "Loop range must have an 'iterator().hasNext()' function or an 'iterator().hasNext' property");
-        MAP.put(HAS_NEXT_FUNCTION_AMBIGUITY, "Function 'iterator().hasNext()' is ambiguous for this expression");
-        MAP.put(HAS_NEXT_MUST_BE_READABLE, "The 'iterator().hasNext' property of the loop range must be readable");
-        MAP.put(HAS_NEXT_PROPERTY_TYPE_MISMATCH, "The type of ''iterator().hasNext'' property of the loop range must be jet.Boolean, but is {0}",
-                RENDER_TYPE);
+        MAP.put(HAS_NEXT_MISSING, "hasNext() cannot be called on iterator() of type ''{0}''", RENDER_TYPE);
+        MAP.put(HAS_NEXT_FUNCTION_AMBIGUITY, "hasNext() is ambiguous for iterator() of type ''{0}''", RENDER_TYPE);
+        MAP.put(HAS_NEXT_FUNCTION_NONE_APPLICABLE, "None of the hasNext() functions is applicable for iterator() of type ''{0}''", RENDER_TYPE);
         MAP.put(HAS_NEXT_FUNCTION_TYPE_MISMATCH, "The ''iterator().hasNext()'' function of the loop range must return jet.Boolean, but returns {0}",
                 RENDER_TYPE);
-        MAP.put(NEXT_AMBIGUITY, "Function 'iterator().next()' is ambiguous for this expression");
-        MAP.put(NEXT_MISSING, "Loop range must have an 'iterator().next()' function");
+
+        MAP.put(NEXT_MISSING, "next() cannot be called on iterator() of type ''{0}''", RENDER_TYPE);
+        MAP.put(NEXT_AMBIGUITY, "next() is ambiguous for iterator() of type ''{0}''", RENDER_TYPE);
+        MAP.put(NEXT_NONE_APPLICABLE, "None of the next() functions is applicable for iterator() of type ''{0}''", RENDER_TYPE);
+
         MAP.put(ITERATOR_MISSING, "For-loop range must have an iterator() method");
         MAP.put(ITERATOR_AMBIGUITY, "Method ''iterator()'' is ambiguous for this expression: {0}", AMBIGUOUS_CALLS);
 
@@ -276,6 +282,7 @@ public class DefaultErrorMessages {
         MAP.put(MANY_CLASSES_IN_SUPERTYPE_LIST, "Only one class may appear in a supertype list");
         MAP.put(SUPERTYPE_NOT_A_CLASS_OR_TRAIT, "Only classes and traits may serve as supertypes");
         MAP.put(SUPERTYPE_INITIALIZED_IN_TRAIT, "Traits cannot initialize supertypes");
+        MAP.put(CLASS_IN_SUPERTYPE_FOR_ENUM, "Enum class cannot inherit from classes");
         MAP.put(CONSTRUCTOR_IN_TRAIT, "A trait may not have a constructor");
         MAP.put(SUPERTYPE_APPEARS_TWICE, "A supertype appears twice");
         MAP.put(FINAL_SUPERTYPE, "This type is final, so it cannot be inherited from");
@@ -308,8 +315,6 @@ public class DefaultErrorMessages {
         MAP.put(TYPE_MISMATCH_IN_FOR_LOOP, "The loop iterates over values of type {0} but the parameter is declared to be {1}", RENDER_TYPE,
                 RENDER_TYPE);
         MAP.put(TYPE_MISMATCH_IN_CONDITION, "Condition must be of type jet.Boolean, but is of type {0}", RENDER_TYPE);
-        MAP.put(TYPE_MISMATCH_IN_TUPLE_PATTERN, "Type mismatch: subject is of type {0} but the pattern is a {1}-tuple", RENDER_TYPE, TO_STRING);
-        MAP.put(TYPE_MISMATCH_IN_BINDING_PATTERN, "{0} is not a supertype of {1}. Use ''is'' to match against {0}", RENDER_TYPE, RENDER_TYPE);
         MAP.put(INCOMPATIBLE_TYPES, "Incompatible types: {0} and {1}", RENDER_TYPE, RENDER_TYPE);
         MAP.put(EXPECTED_CONDITION, "Expected condition of jet.Boolean type");
 

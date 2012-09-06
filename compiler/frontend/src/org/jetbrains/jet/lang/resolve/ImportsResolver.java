@@ -22,6 +22,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.jet.lang.ModuleConfiguration;
 import org.jetbrains.jet.lang.descriptors.*;
 import org.jetbrains.jet.lang.psi.*;
+import org.jetbrains.jet.lang.resolve.name.FqNameUnsafe;
 import org.jetbrains.jet.lang.resolve.name.Name;
 import org.jetbrains.jet.lang.resolve.scopes.JetScope;
 import org.jetbrains.jet.lang.resolve.scopes.WritableScope;
@@ -31,6 +32,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
+import static org.jetbrains.jet.lang.diagnostics.Errors.CLASS_HAS_KOTLIN_ANALOG;
 import static org.jetbrains.jet.lang.diagnostics.Errors.USELESS_HIDDEN_IMPORT;
 import static org.jetbrains.jet.lang.diagnostics.Errors.USELESS_SIMPLE_IMPORT;
 
@@ -110,14 +112,19 @@ public class ImportsResolver {
         configuration.addDefaultImports(defaultImportDirectives);
         for (JetImportDirective defaultImportDirective : defaultImportDirectives) {
             TemporaryBindingTrace temporaryTrace = TemporaryBindingTrace.create(trace); //not to trace errors of default imports
-            qualifiedExpressionResolver.processImportReference(defaultImportDirective, rootScope, namespaceScope, delayedImporter, temporaryTrace, onlyClasses);
+            qualifiedExpressionResolver.processImportReference(defaultImportDirective, rootScope, namespaceScope, delayedImporter,
+                                                               temporaryTrace, configuration, onlyClasses);
         }
 
         for (JetImportDirective importDirective : importDirectives) {
             Collection<? extends DeclarationDescriptor> descriptors =
-                qualifiedExpressionResolver.processImportReference(importDirective, rootScope, namespaceScope, delayedImporter, trace, onlyClasses);
+                qualifiedExpressionResolver.processImportReference(importDirective, rootScope, namespaceScope, delayedImporter,
+                                                                   trace, configuration, onlyClasses);
             if (descriptors.size() == 1) {
                 resolvedDirectives.put(importDirective, descriptors.iterator().next());
+            }
+            for (DeclarationDescriptor descriptor : descriptors) {
+                reportHasKotlinAnalog(onlyClasses, configuration, trace, importDirective, descriptor);
             }
         }
         delayedImporter.processImports();
@@ -126,6 +133,22 @@ public class ImportsResolver {
             for (JetImportDirective importDirective : importDirectives) {
                 reportUselessImport(importDirective, namespaceScope, resolvedDirectives, trace);
             }
+        }
+    }
+
+    private static void reportHasKotlinAnalog(
+            boolean onlyClasses,
+            @NotNull ModuleConfiguration configuration,
+            @NotNull BindingTrace trace,
+            @NotNull JetImportDirective importDirective,
+            @NotNull DeclarationDescriptor descriptor
+    ) {
+        if (!(descriptor instanceof ClassDescriptor) || onlyClasses) return;
+        FqNameUnsafe fqName = DescriptorUtils.getFQName(descriptor);
+        Collection<ClassDescriptor> kotlinAnalogs = configuration.getKotlinAnalogs(fqName);
+        JetExpression importedReference = importDirective.getImportedReference();
+        if (importedReference != null && !kotlinAnalogs.isEmpty()) {
+            trace.report(CLASS_HAS_KOTLIN_ANALOG.on(importedReference, kotlinAnalogs));
         }
     }
 

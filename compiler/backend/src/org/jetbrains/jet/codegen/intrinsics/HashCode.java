@@ -22,10 +22,10 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.asm4.Opcodes;
 import org.jetbrains.asm4.Type;
 import org.jetbrains.asm4.commons.InstructionAdapter;
+import org.jetbrains.jet.codegen.AsmTypeConstants;
 import org.jetbrains.jet.codegen.ExpressionCodegen;
-import org.jetbrains.jet.codegen.GenerationState;
-import org.jetbrains.jet.codegen.JetTypeMapper;
 import org.jetbrains.jet.codegen.StackValue;
+import org.jetbrains.jet.codegen.state.GenerationState;
 import org.jetbrains.jet.lang.psi.JetExpression;
 
 import java.util.List;
@@ -35,14 +35,16 @@ import java.util.List;
  */
 public class HashCode implements IntrinsicMethod {
     @Override
-    public StackValue generate(ExpressionCodegen codegen,
+    public StackValue generate(
+            ExpressionCodegen codegen,
             InstructionAdapter v,
             @NotNull Type expectedType,
             @Nullable PsiElement element,
             @Nullable List<JetExpression> arguments,
             StackValue receiver,
-            @NotNull GenerationState state) {
-        receiver.put(JetTypeMapper.TYPE_OBJECT, v);
+            @NotNull GenerationState state
+    ) {
+        receiver.put(AsmTypeConstants.OBJECT_TYPE, v);
         v.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/Object", "hashCode", "()I");
         return StackValue.onStack(Type.INT_TYPE);
     }

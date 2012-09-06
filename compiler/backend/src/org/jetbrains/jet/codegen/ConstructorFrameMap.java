@@ -17,12 +17,16 @@
 package org.jetbrains.jet.codegen;
 
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.asm4.Type;
+import org.jetbrains.jet.codegen.signature.JvmMethodParameterKind;
+import org.jetbrains.jet.codegen.signature.JvmMethodParameterSignature;
 import org.jetbrains.jet.lang.descriptors.ConstructorDescriptor;
 import org.jetbrains.jet.lang.descriptors.ValueParameterDescriptor;
-import org.jetbrains.asm4.Type;
 
 import java.util.Collections;
 import java.util.List;
+
+import static org.jetbrains.jet.codegen.AsmTypeConstants.OBJECT_TYPE;
 
 /**
  * @author yole
@@ -30,32 +34,36 @@ import java.util.List;
  */
 public class ConstructorFrameMap extends FrameMap {
     private int myOuterThisIndex = -1;
-    private int myTypeInfoIndex  = -1;
 
-    public ConstructorFrameMap(CallableMethod callableMethod, @Nullable ConstructorDescriptor descriptor, boolean hasThis0) {
-        enterTemp(); // this
-        if (descriptor != null) {
-            if (hasThis0) {
-                myOuterThisIndex = enterTemp();   // outer class instance
+    public ConstructorFrameMap(CallableMethod callableMethod, @Nullable ConstructorDescriptor descriptor) {
+        enterTemp(OBJECT_TYPE); // this
+
+        final List<JvmMethodParameterSignature> parameterTypes = callableMethod.getSignature().getKotlinParameterTypes();
+        if (parameterTypes != null) {
+            for (JvmMethodParameterSignature parameterType : parameterTypes) {
+                if (parameterType.getKind() == JvmMethodParameterKind.OUTER) {
+                    myOuterThisIndex = enterTemp(OBJECT_TYPE); // this0
+                }
+                else if (parameterType.getKind() != JvmMethodParameterKind.VALUE) {
+                    enterTemp(parameterType.getAsmType());
+                }
+                else {
+                    break;
+                }
             }
         }
 
         List<Type> explicitArgTypes = callableMethod.getValueParameterTypes();
-
         List<ValueParameterDescriptor> paramDescrs = descriptor != null
-                ? descriptor.getValueParameters()
-                : Collections.<ValueParameterDescriptor>emptyList();
+                                                     ? descriptor.getValueParameters()
+                                                     : Collections.<ValueParameterDescriptor>emptyList();
         for (int i = 0; i < paramDescrs.size(); i++) {
             ValueParameterDescriptor parameter = paramDescrs.get(i);
-            enter(parameter, explicitArgTypes.get(i).getSize());
+            enter(parameter, explicitArgTypes.get(i));
         }
     }
 
     public int getOuterThisIndex() {
         return myOuterThisIndex;
-    }
-
-    public int getTypeInfoIndex() {
-        return myTypeInfoIndex;
     }
 }

@@ -31,7 +31,6 @@ class Example(a : Foo, i : Int) : Bar(i), Some {
 memberDeclaration
   : classObject
   : object
-  : constructor
   : function
   : property
   : class
@@ -81,14 +80,23 @@ functionBody
   : "=" expression
   ;
 
+variableDeclarationEntry
+  : SimpleName (":" type)?
+  ;
+
+multipleVariableDeclarations
+  : "(" variableDeclarationEntry{","} ")"
+  ;
+
 property
   : modifiers ("val" | "var")
       typeParameters? (type "." | annotations)?
-      SimpleName (":" type)?
+      (multipleVariableDeclarations | variableDeclarationEntry)
       typeConstraints
       ("=" expression SEMI?)?
       (getter? setter? | setter? getter?) SEMI?
   ;
+
 /**
 bq. See [Properties and Fields]
 */

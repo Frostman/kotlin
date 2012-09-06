@@ -109,7 +109,7 @@ get() = childNodes.outerHTML
  * Returns the HTML representation of the nodes
  */
 public val NodeList.outerHTML: String
-get() = toList().map<Node, String> { it.innerHTML }.makeString("")
+get() = toList().map { it.innerHTML }.makeString("")
 
 /** Returns an [[Iterator]] of all the next [[Element]] siblings */
 fun Node.nextElements(): Iterator<Element> = nextSiblings().filterIsInstance<Node, Element>(javaClass<Element>())
@@ -118,7 +118,7 @@ fun Node.nextElements(): Iterator<Element> = nextSiblings().filterIsInstance<Nod
 fun Node.previousElements(): Iterator<Element> = previousSiblings().filterIsInstance<Node, Element>(javaClass<Element>())
 
 
-var Element.classSet : Set<String>
+var Element.classSet : MutableSet<String>
 get() {
     val answer = LinkedHashSet<String>()
     val array = this.classes.split("""\s""")

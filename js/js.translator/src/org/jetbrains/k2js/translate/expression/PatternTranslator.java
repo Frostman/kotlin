@@ -16,8 +16,10 @@
 
 package org.jetbrains.k2js.translate.expression;
 
-import com.google.dart.compiler.backend.js.ast.*;
-import com.google.dart.compiler.util.AstUtil;
+import com.google.dart.compiler.backend.js.ast.JsExpression;
+import com.google.dart.compiler.backend.js.ast.JsInvocation;
+import com.google.dart.compiler.backend.js.ast.JsName;
+import com.google.dart.compiler.backend.js.ast.JsNameRef;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.lang.descriptors.ClassDescriptor;
@@ -29,8 +31,6 @@ import org.jetbrains.k2js.translate.utils.BindingUtils;
 import org.jetbrains.k2js.translate.utils.TranslationUtils;
 
 import static org.jetbrains.k2js.translate.utils.JsAstUtils.*;
-import static org.jetbrains.k2js.translate.utils.PsiUtils.getPattern;
-import static org.jetbrains.k2js.translate.utils.PsiUtils.getTypeReference;
 
 /**
  * @author Pavel Talanov
@@ -49,45 +49,30 @@ public final class PatternTranslator extends AbstractTranslator {
     @NotNull
     public JsExpression translateIsExpression(@NotNull JetIsExpression expression) {
         JsExpression left = Translation.translateAsExpression(expression.getLeftHandSide(), context());
-        JetPattern pattern = getPattern(expression);
-        JsExpression resultingExpression = translatePattern(pattern, left);
+        JetTypeReference typeReference = expression.getTypeRef();
+        assert typeReference != null;
+        JsExpression result = translateIsCheck(left, typeReference);
         if (expression.isNegated()) {
-            return negated(resultingExpression);
+            return negated(result);
         }
-        return resultingExpression;
+        return result;
     }
 
     @NotNull
-    public JsExpression translatePattern(@NotNull JetPattern pattern, @Nullable JsExpression expressionToMatch) {
-        if (expressionToMatch == null) {
-            assert pattern instanceof JetExpressionPattern : "When using when without parameters we can have only expression patterns";
-            return translateExpressionForExpressionPattern((JetExpressionPattern)pattern);
-        }
-        if (pattern instanceof JetTypePattern) {
-            return translateTypePattern(expressionToMatch, (JetTypePattern)pattern);
-        }
-        if (pattern instanceof JetExpressionPattern) {
-            return translateExpressionPattern(expressionToMatch, (JetExpressionPattern)pattern);
-        }
-        throw new AssertionError("Unsupported pattern type " + pattern.getClass());
-    }
-
-    @NotNull
-    private JsExpression translateTypePattern(@NotNull JsExpression expressionToMatch,
-                                              @NotNull JetTypePattern pattern) {
-        JsExpression result = translateAsIntrinsicTypeCheck(expressionToMatch, pattern);
+    public JsExpression translateIsCheck(@NotNull JsExpression subject, @NotNull JetTypeReference typeReference) {
+        JsExpression result = translateAsIntrinsicTypeCheck(subject, typeReference);
         if (result != null) {
             return result;
         }
-        return translateAsIsCheck(expressionToMatch, pattern);
+        return translateAsIsCheck(subject, typeReference);
     }
 
     @NotNull
     private JsExpression translateAsIsCheck(@NotNull JsExpression expressionToMatch,
-                                            @NotNull JetTypePattern pattern) {
-        JsInvocation isCheck = AstUtil.newInvocation(context().namer().isOperationReference(),
-                                                     expressionToMatch, getClassReference(pattern));
-        if (isNullable(pattern)) {
+                                            @NotNull JetTypeReference typeReference) {
+        JsInvocation isCheck = new JsInvocation(context().namer().isOperationReference(),
+                                                     expressionToMatch, getClassReference(typeReference));
+        if (isNullable(typeReference)) {
             return addNullCheck(expressionToMatch, isCheck);
         }
         return isCheck;
@@ -95,9 +80,9 @@ public final class PatternTranslator extends AbstractTranslator {
 
     @Nullable
     private JsExpression translateAsIntrinsicTypeCheck(@NotNull JsExpression expressionToMatch,
-                                                       @NotNull JetTypePattern pattern) {
+                                                       @NotNull JetTypeReference typeReference) {
         JsExpression result = null;
-        JsName className = getClassReference(pattern).getName();
+        JsName className = getClassReference(typeReference).getName();
         if (className.getIdent().equals("String")) {
             result = typeof(expressionToMatch, program().getStringLiteral("string"));
         }
@@ -108,17 +93,16 @@ public final class PatternTranslator extends AbstractTranslator {
     }
 
     @NotNull
-    private JsExpression addNullCheck(@NotNull JsExpression expressionToMatch, @NotNull JsInvocation isCheck) {
-        return or(TranslationUtils.isNullCheck(context(), expressionToMatch), isCheck);
+    private static JsExpression addNullCheck(@NotNull JsExpression expressionToMatch, @NotNull JsInvocation isCheck) {
+        return or(TranslationUtils.isNullCheck(expressionToMatch), isCheck);
     }
 
-    private boolean isNullable(JetTypePattern pattern) {
-        return BindingUtils.getTypeByReference(bindingContext(), getTypeReference(pattern)).isNullable();
+    private boolean isNullable(JetTypeReference typeReference) {
+        return BindingUtils.getTypeByReference(bindingContext(), typeReference).isNullable();
     }
 
     @NotNull
-    private JsNameRef getClassReference(@NotNull JetTypePattern pattern) {
-        JetTypeReference typeReference = getTypeReference(pattern);
+    private JsNameRef getClassReference(@NotNull JetTypeReference typeReference) {
         return getClassNameReferenceForTypeReference(typeReference);
     }
 
@@ -130,27 +114,13 @@ public final class PatternTranslator extends AbstractTranslator {
     }
 
     @NotNull
-    private JsExpression translateExpressionPattern(@NotNull JsExpression expressionToMatch, JetExpressionPattern pattern) {
-        JsExpression expressionToMatchAgainst = translateExpressionForExpressionPattern(pattern);
-        JsBinaryOperation eq = equality(expressionToMatch, expressionToMatchAgainst);
-        // Uncaught TypeError: Cannot convert object to primitive value
-        if (context().isEcma5()) {
-            if (expressionToMatchAgainst instanceof JsNumberLiteral ||
-                expressionToMatchAgainst instanceof JsStringLiteral ||
-                expressionToMatchAgainst instanceof JsBooleanLiteral) {
-                JsNameRef valueOf = new JsNameRef("valueOf");
-                valueOf.setQualifier(expressionToMatch);
-                return and(valueOf, eq);
-            }
-        }
-
-        return eq;
+    public JsExpression translateExpressionPattern(@NotNull JsExpression expressionToMatch, @NotNull JetExpression patternExpression) {
+        JsExpression expressionToMatchAgainst = translateExpressionForExpressionPattern(patternExpression);
+        return equality(expressionToMatch, expressionToMatchAgainst);
     }
 
     @NotNull
-    private JsExpression translateExpressionForExpressionPattern(@NotNull JetExpressionPattern pattern) {
-        JetExpression patternExpression = pattern.getExpression();
-        assert patternExpression != null : "Expression patter should have an expression.";
+    public JsExpression translateExpressionForExpressionPattern(@NotNull JetExpression patternExpression) {
         return Translation.translateAsExpression(patternExpression, context());
     }
 }

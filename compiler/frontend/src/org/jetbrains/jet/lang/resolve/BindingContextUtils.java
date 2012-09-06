@@ -93,7 +93,7 @@ public class BindingContextUtils {
     @Nullable
     public static VariableDescriptor extractVariableDescriptorIfAny(@NotNull BindingContext bindingContext, @Nullable JetElement element, boolean onlyReference) {
         DeclarationDescriptor descriptor = null;
-        if (!onlyReference && (element instanceof JetProperty || element instanceof JetParameter)) {
+        if (!onlyReference && (element instanceof JetVariableDeclaration || element instanceof JetParameter)) {
             descriptor = bindingContext.get(BindingContext.DECLARATION_TO_DESCRIPTOR, element);
         }
         else if (element instanceof JetSimpleNameExpression) {
@@ -193,5 +193,28 @@ public class BindingContextUtils {
         }
 
         trace.record(BindingContext.FUNCTION, psiElement, function);
+    }
+
+    @NotNull
+    public static <K, V> V getNotNull(
+        @NotNull BindingContext bindingContext,
+        @NotNull ReadOnlySlice<K, V> slice,
+        @NotNull K key
+    ) {
+        return getNotNull(bindingContext, slice, key, "Value at " + slice + " must not be null for " + key);
+    }
+
+    @NotNull
+    public static <K, V> V getNotNull(
+            @NotNull BindingContext bindingContext,
+            @NotNull ReadOnlySlice<K, V> slice,
+            @NotNull K key,
+            @NotNull String messageIfNull
+    ) {
+        V value = bindingContext.get(slice, key);
+        if (value == null) {
+            throw new IllegalStateException(messageIfNull);
+        }
+        return value;
     }
 }

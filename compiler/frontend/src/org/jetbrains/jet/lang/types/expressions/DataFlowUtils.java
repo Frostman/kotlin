@@ -20,13 +20,11 @@ import com.intellij.openapi.util.Ref;
 import com.intellij.psi.tree.IElementType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.jet.lang.descriptors.VariableDescriptor;
 import org.jetbrains.jet.lang.psi.*;
 import org.jetbrains.jet.lang.resolve.BindingContext;
 import org.jetbrains.jet.lang.resolve.calls.autocasts.DataFlowInfo;
 import org.jetbrains.jet.lang.resolve.calls.autocasts.DataFlowValue;
 import org.jetbrains.jet.lang.resolve.calls.autocasts.DataFlowValueFactory;
-import org.jetbrains.jet.lang.resolve.scopes.WritableScope;
 import org.jetbrains.jet.lang.types.ErrorUtils;
 import org.jetbrains.jet.lang.types.JetType;
 import org.jetbrains.jet.lang.types.JetTypeInfo;
@@ -34,8 +32,6 @@ import org.jetbrains.jet.lang.types.TypeUtils;
 import org.jetbrains.jet.lang.types.checker.JetTypeChecker;
 import org.jetbrains.jet.lang.types.lang.JetStandardClasses;
 import org.jetbrains.jet.lexer.JetTokens;
-
-import java.util.List;
 
 import static org.jetbrains.jet.lang.diagnostics.Errors.*;
 import static org.jetbrains.jet.lang.resolve.BindingContext.AUTOCAST;
@@ -48,23 +44,14 @@ public class DataFlowUtils {
     }
 
     @NotNull
-    public static DataFlowInfo extractDataFlowInfoFromCondition(@Nullable JetExpression condition, final boolean conditionValue, @Nullable final WritableScope scopeToExtend, final ExpressionTypingContext context) {
+    public static DataFlowInfo extractDataFlowInfoFromCondition(@Nullable JetExpression condition, final boolean conditionValue, final ExpressionTypingContext context) {
         if (condition == null) return context.dataFlowInfo;
         final Ref<DataFlowInfo> result = new Ref<DataFlowInfo>(null);
         condition.accept(new JetVisitorVoid() {
             @Override
             public void visitIsExpression(JetIsExpression expression) {
                 if (conditionValue && !expression.isNegated() || !conditionValue && expression.isNegated()) {
-                    JetPattern pattern = expression.getPattern();
-                    result.set(context.patternsToDataFlowInfo.get(pattern));
-                    if (scopeToExtend != null) {
-                        List<VariableDescriptor> descriptors = context.patternsToBoundVariableLists.get(pattern);
-                        if (descriptors != null) {
-                            for (VariableDescriptor variableDescriptor : descriptors) {
-                                scopeToExtend.addVariableDescriptor(variableDescriptor);
-                            }
-                        }
-                    }
+                    result.set(context.trace.get(BindingContext.DATAFLOW_INFO_AFTER_CONDITION, expression));
                 }
             }
 
@@ -72,18 +59,11 @@ public class DataFlowUtils {
             public void visitBinaryExpression(JetBinaryExpression expression) {
                 IElementType operationToken = expression.getOperationToken();
                 if (OperatorConventions.BOOLEAN_OPERATIONS.containsKey(operationToken)) {
-                    WritableScope actualScopeToExtend;
-                    if (operationToken == JetTokens.ANDAND) {
-                        actualScopeToExtend = conditionValue ? scopeToExtend : null;
-                    }
-                    else {
-                        actualScopeToExtend = conditionValue ? null : scopeToExtend;
-                    }
 
-                    DataFlowInfo dataFlowInfo = extractDataFlowInfoFromCondition(expression.getLeft(), conditionValue, actualScopeToExtend, context);
+                    DataFlowInfo dataFlowInfo = extractDataFlowInfoFromCondition(expression.getLeft(), conditionValue, context);
                     JetExpression expressionRight = expression.getRight();
                     if (expressionRight != null) {
-                        DataFlowInfo rightInfo = extractDataFlowInfoFromCondition(expressionRight, conditionValue, actualScopeToExtend, context);
+                        DataFlowInfo rightInfo = extractDataFlowInfoFromCondition(expressionRight, conditionValue, context);
                         DataFlowInfo.CompositionOperator operator;
                         if (operationToken == JetTokens.ANDAND) {
                             operator = conditionValue ? DataFlowInfo.AND : DataFlowInfo.OR;
@@ -134,7 +114,7 @@ public class DataFlowUtils {
                 if (operationTokenType == JetTokens.EXCL) {
                     JetExpression baseExpression = expression.getBaseExpression();
                     if (baseExpression != null) {
-                        result.set(extractDataFlowInfoFromCondition(baseExpression, !conditionValue, scopeToExtend, context));
+                        result.set(extractDataFlowInfoFromCondition(baseExpression, !conditionValue, context));
                     }
                 }
             }

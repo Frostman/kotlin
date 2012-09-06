@@ -16,6 +16,7 @@
 
 package org.jetbrains.jet.lang.types.lang;
 
+import com.google.common.collect.ImmutableSet;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.io.FileUtil;
@@ -23,7 +24,8 @@ import com.intellij.psi.PsiFileFactory;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.lang.descriptors.ClassDescriptor;
-import org.jetbrains.jet.lang.descriptors.FunctionDescriptor;
+import org.jetbrains.jet.lang.descriptors.ClassifierDescriptor;
+import org.jetbrains.jet.lang.descriptors.DeclarationDescriptor;
 import org.jetbrains.jet.lang.descriptors.PropertyDescriptor;
 import org.jetbrains.jet.lang.descriptors.annotations.AnnotationDescriptor;
 import org.jetbrains.jet.lang.psi.JetFile;
@@ -35,11 +37,7 @@ import org.jetbrains.jet.lang.resolve.scopes.JetScope;
 import org.jetbrains.jet.lang.resolve.scopes.RedeclarationHandler;
 import org.jetbrains.jet.lang.resolve.scopes.WritableScope;
 import org.jetbrains.jet.lang.resolve.scopes.WritableScopeImpl;
-import org.jetbrains.jet.lang.types.JetType;
-import org.jetbrains.jet.lang.types.JetTypeImpl;
-import org.jetbrains.jet.lang.types.TypeProjection;
-import org.jetbrains.jet.lang.types.TypeUtils;
-import org.jetbrains.jet.lang.types.Variance;
+import org.jetbrains.jet.lang.types.*;
 import org.jetbrains.jet.plugin.JetFileType;
 
 import java.io.IOException;
@@ -93,11 +91,17 @@ public class JetStandardLibrary {
     private ClassDescriptor stringClass;
     private ClassDescriptor arrayClass;
     private ClassDescriptor iterableClass;
+    private ClassDescriptor iteratorClass;
+    private ClassDescriptor mutableIterableClass;
+    private ClassDescriptor mutableIteratorClass;
     private ClassDescriptor comparableClass;
     private ClassDescriptor throwableClass;
+    private ClassDescriptor enumClass;
+    private ClassDescriptor annotationClass;
+    private ClassDescriptor volatileClass;
 
     private JetType stringType;
-
+    private JetType annotationType;
     private JetType tuple0Type;
 
     private EnumMap<PrimitiveType, ClassDescriptor> primitiveTypeToClass;
@@ -115,7 +119,9 @@ public class JetStandardLibrary {
                 "Ranges.jet",
                 "Iterables.jet",
                 "Iterators.jet",
-                "Arrays.jet"
+                "Arrays.jet",
+                "Enum.jet",
+                "Collections.jet"
         );
         try {
             List<JetFile> files = new LinkedList<JetFile>();
@@ -158,17 +164,25 @@ public class JetStandardLibrary {
         if (libraryScope == null) {
             this.libraryScope = JetStandardClasses.STANDARD_CLASSES_NAMESPACE.getMemberScope();
 
-            this.numberClass = (ClassDescriptor) libraryScope.getClassifier(Name.identifier("Number"));
-            this.stringClass = (ClassDescriptor) libraryScope.getClassifier(Name.identifier("String"));
-            this.charSequenceClass = (ClassDescriptor) libraryScope.getClassifier(Name.identifier("CharSequence"));
-            this.arrayClass = (ClassDescriptor) libraryScope.getClassifier(Name.identifier("Array"));
-            this.throwableClass = (ClassDescriptor) libraryScope.getClassifier(Name.identifier("Throwable"));
+            this.numberClass = getStdClassByName("Number");
+            this.stringClass = getStdClassByName("String");
+            this.charSequenceClass = getStdClassByName("CharSequence");
+            this.arrayClass = getStdClassByName("Array");
+            this.throwableClass = getStdClassByName("Throwable");
+            this.enumClass = getStdClassByName("Enum");
+            this.volatileClass = getStdClassByName("volatile");
 
-            this.iterableClass = (ClassDescriptor) libraryScope.getClassifier(Name.identifier("Iterable"));
-            this.comparableClass = (ClassDescriptor) libraryScope.getClassifier(Name.identifier("Comparable"));
+            this.iterableClass = getStdClassByName("Iterable");
+            this.iteratorClass = getStdClassByName("Iterator");
+            this.mutableIterableClass = getStdClassByName("MutableIterable");
+            this.mutableIteratorClass = getStdClassByName("MutableIterator");
+            this.comparableClass = getStdClassByName("Comparable");
 
             this.stringType = new JetTypeImpl(getString());
             this.tuple0Type = new JetTypeImpl(JetStandardClasses.getTuple(0));
+
+            this.annotationClass = getStdClassByName("Annotation");
+            this.annotationType = new JetTypeImpl(annotationClass);
 
             primitiveTypeToClass = new EnumMap<PrimitiveType, ClassDescriptor>(PrimitiveType.class);
             primitiveTypeToJetType = new EnumMap<PrimitiveType, JetType>(PrimitiveType.class);
@@ -181,6 +195,13 @@ public class JetStandardLibrary {
                 makePrimitive(primitive);
             }
         }
+    }
+
+    @NotNull
+    private ClassDescriptor getStdClassByName(String className) {
+        ClassDescriptor classDescriptor = (ClassDescriptor) libraryScope.getClassifier(Name.identifier(className));
+        assert classDescriptor != null : "Standard class not found: " + className;
+        return classDescriptor;
     }
 
     private void makePrimitive(PrimitiveType primitiveType) {
@@ -197,6 +218,18 @@ public class JetStandardLibrary {
         jetArrayTypeToPrimitiveJetType.put(arrayType, type);
     }
 
+    public Set<DeclarationDescriptor> getIntegralRanges() {
+        initStdClasses();
+
+        return ImmutableSet.<DeclarationDescriptor>of(
+                getStdClassByName("ByteRange"),
+                getStdClassByName("ShortRange"),
+                getStdClassByName("CharRange"),
+                getStdClassByName("IntRange"),
+                getStdClassByName("LongRange")
+        );
+    }
+
     public Collection<ClassDescriptor> getStandardTypes() {
         initStdClasses();
 
@@ -207,7 +240,11 @@ public class JetStandardLibrary {
         classDescriptors.add(arrayClass);
         classDescriptors.add(throwableClass);
         classDescriptors.add(iterableClass);
+        classDescriptors.add(iteratorClass);
+        classDescriptors.add(mutableIterableClass);
+        classDescriptors.add(mutableIteratorClass);
         classDescriptors.add(comparableClass);
+        classDescriptors.add(enumClass);
 
         return classDescriptors;
     }
@@ -289,6 +326,24 @@ public class JetStandardLibrary {
     }
 
     @NotNull
+    public ClassDescriptor getIterator() {
+        initStdClasses();
+        return iteratorClass;
+    }
+
+    @NotNull
+    public ClassDescriptor getMutableIterable() {
+        initStdClasses();
+        return mutableIterableClass;
+    }
+
+    @NotNull
+    public ClassDescriptor getMutableIterator() {
+        initStdClasses();
+        return mutableIteratorClass;
+    }
+
+    @NotNull
     public ClassDescriptor getComparable() {
         initStdClasses();
         return comparableClass;
@@ -298,6 +353,88 @@ public class JetStandardLibrary {
     public ClassDescriptor getThrowable() {
         initStdClasses();
         return throwableClass;
+    }
+
+    @NotNull
+    public ClassDescriptor getEnum() {
+        initStdClasses();
+        return enumClass;
+    }
+
+    @NotNull
+    public ClassDescriptor getAnnotation() {
+        initStdClasses();
+        return annotationClass;
+    }
+
+    @NotNull
+    public JetType getAnnotationType() {
+        initStdClasses();
+        return annotationType;
+    }
+
+    @NotNull
+    public ClassDescriptor getCollection() {
+        return getStdClassByName("Collection");
+    }
+
+    @NotNull
+    public ClassDescriptor getMutableCollection() {
+        return getStdClassByName("MutableCollection");
+    }
+
+    @NotNull
+    public ClassDescriptor getList() {
+        return getStdClassByName("List");
+    }
+
+    @NotNull
+    public ClassDescriptor getMutableList() {
+        return getStdClassByName("MutableList");
+    }
+
+    @NotNull
+    public ClassDescriptor getListIterator() {
+        return getStdClassByName("ListIterator");
+    }
+
+    @NotNull
+    public ClassDescriptor getMutableListIterator() {
+        return getStdClassByName("MutableListIterator");
+    }
+
+    @NotNull
+    public ClassDescriptor getSet() {
+        return getStdClassByName("Set");
+    }
+
+    @NotNull
+    public ClassDescriptor getMutableSet() {
+        return getStdClassByName("MutableSet");
+    }
+
+    @NotNull
+    public ClassDescriptor getMap() {
+        return getStdClassByName("Map");
+    }
+
+    @NotNull
+    public ClassDescriptor getMutableMap() {
+        return getStdClassByName("MutableMap");
+    }
+
+    @NotNull
+    public ClassDescriptor getMapEntry() {
+        ClassifierDescriptor entry = getMap().getDefaultType().getMemberScope().getClassifier(Name.identifier("Entry"));
+        assert entry instanceof ClassDescriptor;
+        return (ClassDescriptor) entry;
+    }
+
+    @NotNull
+    public ClassDescriptor getMutableMapEntry() {
+        ClassifierDescriptor entry = getMutableMap().getDefaultType().getMemberScope().getClassifier(Name.identifier("MutableEntry"));
+        assert entry instanceof ClassDescriptor;
+        return (ClassDescriptor) entry;
     }
 
     @NotNull
@@ -357,6 +494,11 @@ public class JetStandardLibrary {
     }
 
     @NotNull
+    public JetType getEnumType(@NotNull JetType argument) {
+        return getEnumType(Variance.INVARIANT, argument);
+    }
+
+    @NotNull
     public JetType getArrayType(@NotNull Variance projectionType, @NotNull JetType argument) {
         List<TypeProjection> types = Collections.singletonList(new TypeProjection(projectionType, argument));
         return new JetTypeImpl(
@@ -368,6 +510,18 @@ public class JetStandardLibrary {
         );
     }
     
+    @NotNull
+    public JetType getEnumType(@NotNull Variance projectionType, @NotNull JetType argument) {
+        List<TypeProjection> types = Collections.singletonList(new TypeProjection(projectionType, argument));
+        return new JetTypeImpl(
+                Collections.<AnnotationDescriptor>emptyList(),
+                getEnum().getTypeConstructor(),
+                false,
+                types,
+                getEnum().getMemberScope(types)
+        );
+    }
+
     @NotNull
     public JetType getArrayElementType(@NotNull JetType arrayType) {
         // make non-null?
@@ -404,16 +558,20 @@ public class JetStandardLibrary {
         return primitiveJetTypeToJetArrayType.get(jetType);
     }
 
-    public static boolean isVolatile(PropertyDescriptor descriptor) {
+    public boolean isVolatile(@NotNull PropertyDescriptor descriptor) {
         List<AnnotationDescriptor> annotations = descriptor.getOriginal().getAnnotations();
         if (annotations != null) {
-            for(AnnotationDescriptor d: annotations) {
-                if (JetStandardLibraryNames.VOLATILE.is(d.getType())) {
+            for(AnnotationDescriptor annotation: annotations) {
+                if (volatileClass.equals(annotation.getType().getConstructor().getDeclarationDescriptor())) {
                     return true;
                 }
             }
         }
         return false;
+    }
+
+    public boolean isArray(@NotNull JetType type) {
+        return getArray().equals(type.getConstructor().getDeclarationDescriptor());
     }
 
     public JetType getTuple0Type() {

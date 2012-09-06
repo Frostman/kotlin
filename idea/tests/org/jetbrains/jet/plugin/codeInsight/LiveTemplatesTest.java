@@ -16,6 +16,7 @@
 
 package org.jetbrains.jet.plugin.codeInsight;
 
+import com.intellij.ProjectTopics;
 import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.codeInsight.lookup.LookupEx;
 import com.intellij.codeInsight.lookup.LookupManager;
@@ -27,6 +28,7 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.command.CommandProcessor;
 import com.intellij.openapi.editor.actionSystem.EditorActionHandler;
 import com.intellij.openapi.editor.actionSystem.EditorActionManager;
+import com.intellij.openapi.roots.impl.ModuleRootEventImpl;
 import com.intellij.testFramework.LightProjectDescriptor;
 import com.intellij.testFramework.fixtures.LightCodeInsightFixtureTestCase;
 import com.intellij.util.ArrayUtil;
@@ -45,6 +47,30 @@ import java.util.Arrays;
  * @since 2/10/12
  */
 public class LiveTemplatesTest extends LightCodeInsightFixtureTestCase {
+    @Override
+    protected void setUp() throws Exception {
+        super.setUp();
+        myFixture.setTestDataPath(new File(PluginTestCaseBase.getTestDataPathBase(), "/templates").getPath() +
+                                  File.separator);
+        ((TemplateManagerImpl) TemplateManager.getInstance(getProject())).setTemplateTesting(true);
+    }
+
+    @Override
+    protected void tearDown() throws Exception {
+        /*
+         * TODO: remove this when fixed in IDEA
+         * super.tearDown() calls cleanupForNextTest() on PsiManagerImpl, which invalidates a cache of view providers
+         * this affects ExternalAnnotationsManagerImpl making XmlFile instances cached in it invalid
+         * this results in external annotations being not found, unless we invalidate the cache in ExternalAnnotationsManagerImpl.
+         * Currently, sending this funny event is the only way (apart from reflection) to invalidate that cache.
+         * The problem will be fixed in IDEA soon (hopefully).
+         */
+        getProject().getMessageBus().syncPublisher(ProjectTopics.PROJECT_ROOTS).rootsChanged(new ModuleRootEventImpl(getProject(), true));
+
+        ((TemplateManagerImpl) TemplateManager.getInstance(getProject())).setTemplateTesting(false);
+        super.tearDown();
+    }
+
     public void testSout() {
         paremeterless();
     }
@@ -59,7 +85,7 @@ public class LiveTemplatesTest extends LightCodeInsightFixtureTestCase {
 
     public void testSoutv() {
         start();
-        
+
         assertStringItems("args", "x", "y");
         typeAndNextTab("y");
 
@@ -165,7 +191,7 @@ public class LiveTemplatesTest extends LightCodeInsightFixtureTestCase {
     public void testIter() {
         start();
 
-        assertStringItems("args", "collection", "myList", "str", "stream");
+        assertStringItems("args", "myList", "str", "stream");
         type("args");
         nextTab(2);
 
@@ -266,22 +292,8 @@ public class LiveTemplatesTest extends LightCodeInsightFixtureTestCase {
         actionHandler.execute(myFixture.getEditor(), DataManager.getInstance().getDataContext(myFixture.getEditor().getComponent()));
     }
 
-    @Override
-    protected void tearDown() throws Exception {
-        ((TemplateManagerImpl) TemplateManager.getInstance(getProject())).setTemplateTesting(false);
-        super.tearDown();
-    }
-
     private void assertStringItems(@NonNls String... items) {
         assertEquals(Arrays.asList(items), Arrays.asList(getItemStringsSorted()));
-    }
-
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
-        myFixture.setTestDataPath(new File(PluginTestCaseBase.getTestDataPathBase(), "/templates").getPath() +
-                                  File.separator);
-        ((TemplateManagerImpl) TemplateManager.getInstance(getProject())).setTemplateTesting(true);
     }
 
     private String[] getItemStrings() {
@@ -293,7 +305,7 @@ public class LiveTemplatesTest extends LightCodeInsightFixtureTestCase {
         }
         return ArrayUtil.toStringArray(result);
     }
-    
+
     private String[] getItemStringsSorted() {
         String[] items = getItemStrings();
         Arrays.sort(items);

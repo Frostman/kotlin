@@ -20,6 +20,7 @@ import com.google.common.collect.Lists;
 import com.intellij.openapi.util.text.StringUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.jet.JetTestUtils;
+import org.jetbrains.jet.utils.Printer;
 
 import java.io.File;
 import java.util.Collection;
@@ -128,13 +129,10 @@ public class SimpleTestClassModel implements TestClassModel {
 
         @Override
         public void generateBody(@NotNull Printer p, @NotNull String generatorClassFqName) {
-            p.println("JetTestUtils.assertAllTestsPresentByMetadata(" +
-                            "this.getClass(), " +
-                            "\"", generatorClassFqName, "\", " +
-                            "new File(\"", JetTestUtils.getFilePath(rootFile) + "\"), \"",
-                            extension,
-                            "\", ", false,
-                      ");");
+            String assertTestsPresentStr =
+                    String.format("JetTestUtils.assertAllTestsPresentByMetadata(this.getClass(), \"%s\", new File(\"%s\"), \"%s\", %s);",
+                                  generatorClassFqName, JetTestUtils.getFilePath(rootFile), extension, recursive);
+            p.println(assertTestsPresentStr);
         }
 
         @Override

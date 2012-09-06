@@ -611,13 +611,8 @@ public class BasicExpressionTypingVisitor extends ExpressionTypingVisitor {
         if (!results.isNothing()) {
             checkSuper(receiver, results, context.trace, callExpression);
             result[0] = true;
-            if (results.isSingleResult()) {
-                ResolvedCall<FunctionDescriptor> resultingCall = results.getResultingCall();
-                if (resultingCall instanceof ResolvedCallWithTrace) {
-                    if (((ResolvedCallWithTrace)resultingCall).getStatus() == ResolutionStatus.TYPE_INFERENCE_ERROR) {
-                        return null;
-                    }
-                }
+            if (results.isIncomplete()) {
+                return null;
             }
             return results.isSingleResult() ? results.getResultingDescriptor() : null;
         }
@@ -1028,7 +1023,7 @@ public class BasicExpressionTypingVisitor extends ExpressionTypingVisitor {
             else if (OperatorConventions.BOOLEAN_OPERATIONS.containsKey(operationType)) {
                 JetType leftType = facade.getTypeInfo(left, context.replaceScope(context.scope)).getType();
                 WritableScopeImpl leftScope = newWritableScopeImpl(context, "Left scope of && or ||");
-                DataFlowInfo flowInfoLeft = DataFlowUtils.extractDataFlowInfoFromCondition(left, operationType == JetTokens.ANDAND, leftScope, context);  // TODO: This gets computed twice: here and in extractDataFlowInfoFromCondition() for the whole condition
+                DataFlowInfo flowInfoLeft = DataFlowUtils.extractDataFlowInfoFromCondition(left, operationType == JetTokens.ANDAND, context);  // TODO: This gets computed twice: here and in extractDataFlowInfoFromCondition() for the whole condition
                 WritableScopeImpl rightScope = operationType == JetTokens.ANDAND
                                                ? leftScope
                                                : newWritableScopeImpl(context, "Right scope of && or ||");

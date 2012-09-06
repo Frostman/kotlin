@@ -17,25 +17,25 @@
 package org.jetbrains.jet.codegen;
 
 import org.jetbrains.asm4.MethodVisitor;
-import org.jetbrains.asm4.Type;
-import org.jetbrains.asm4.commons.InstructionAdapter;
+
+import static org.jetbrains.jet.codegen.CodegenUtil.generateMethodThrow;
+import static org.jetbrains.jet.codegen.CodegenUtil.generateThrow;
 
 /**
  * @author Stepan Koltsov
  */
 public class StubCodegen {
+    private static final String STUB_EXCEPTION = "java/lang/RuntimeException";
+    private static final String STUB_EXCEPTION_MESSAGE = "Stubs are for compiler only, do not add them to runtime classpath";
+
+    private StubCodegen() {
+    }
+
     public static void generateStubThrow(MethodVisitor mv) {
-        new InstructionAdapter(mv).anew(Type.getObjectType("java/lang/RuntimeException"));
-        new InstructionAdapter(mv).dup();
-        new InstructionAdapter(mv).aconst("Stubs are for compiler only, do not add them to runtime classpath");
-        new InstructionAdapter(mv).invokespecial("java/lang/RuntimeException", "<init>", "(Ljava/lang/String;)V");
-        new InstructionAdapter(mv).athrow();
+        generateThrow(mv, STUB_EXCEPTION, STUB_EXCEPTION_MESSAGE);
     }
 
     public static void generateStubCode(MethodVisitor mv) {
-        mv.visitCode();
-        generateStubThrow(mv);
-        mv.visitMaxs(-1, -1);
-        mv.visitEnd();
+        generateMethodThrow(mv, STUB_EXCEPTION, STUB_EXCEPTION_MESSAGE);
     }
 }

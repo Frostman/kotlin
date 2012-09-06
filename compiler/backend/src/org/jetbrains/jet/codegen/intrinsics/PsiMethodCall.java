@@ -18,12 +18,16 @@ package org.jetbrains.jet.codegen.intrinsics;
 
 import com.intellij.psi.PsiElement;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.jet.codegen.*;
+import org.jetbrains.asm4.Type;
+import org.jetbrains.asm4.commons.InstructionAdapter;
+import org.jetbrains.jet.codegen.CallableMethod;
+import org.jetbrains.jet.codegen.ExpressionCodegen;
+import org.jetbrains.jet.codegen.OwnerKind;
+import org.jetbrains.jet.codegen.StackValue;
+import org.jetbrains.jet.codegen.state.GenerationState;
 import org.jetbrains.jet.lang.descriptors.SimpleFunctionDescriptor;
 import org.jetbrains.jet.lang.psi.JetCallExpression;
 import org.jetbrains.jet.lang.psi.JetExpression;
-import org.jetbrains.asm4.Type;
-import org.jetbrains.asm4.commons.InstructionAdapter;
 
 import java.util.List;
 
@@ -32,16 +36,19 @@ import java.util.List;
  * @author alex.tkachman
  */
 public class PsiMethodCall implements IntrinsicMethod {
-    private final SimpleFunctionDescriptor myMethod;
+    private final SimpleFunctionDescriptor method;
 
     public PsiMethodCall(SimpleFunctionDescriptor method) {
-        myMethod = method;
+        this.method = method;
     }
 
     @Override
-    public StackValue generate(ExpressionCodegen codegen, InstructionAdapter v, @NotNull Type expectedType, PsiElement element,
-            List<JetExpression> arguments, StackValue receiver, @NotNull GenerationState state) {
-        final CallableMethod callableMethod = state.getInjector().getJetTypeMapper().mapToCallableMethod(myMethod, false, OwnerKind.IMPLEMENTATION);
+    public StackValue generate(
+            ExpressionCodegen codegen, InstructionAdapter v, @NotNull Type expectedType, PsiElement element,
+            List<JetExpression> arguments, StackValue receiver, @NotNull GenerationState state
+    ) {
+        final CallableMethod callableMethod =
+                state.getTypeMapper().mapToCallableMethod(method, false, OwnerKind.IMPLEMENTATION);
         codegen.invokeMethodWithArguments(callableMethod, (JetCallExpression) element, receiver);
         return StackValue.onStack(callableMethod.getSignature().getAsmMethod().getReturnType());
     }

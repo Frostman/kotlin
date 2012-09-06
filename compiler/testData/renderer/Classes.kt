@@ -26,7 +26,7 @@ trait TheTrait {
 }
 
 //package rendererTest defined in root package
-//internal final annotation class TheAnnotation defined in rendererTest
+//internal final annotation class TheAnnotation : jet.Annotation defined in rendererTest
 //public open class TheClass<out T : jet.Int, X> defined in rendererTest
 //<out T : jet.Int> defined in rendererTest.TheClass
 //<X> defined in rendererTest.TheClass
@@ -37,5 +37,5 @@ trait TheTrait {
 //internal final class InternalClass defined in rendererTest
 //internal trait TheTrait defined in rendererTest
 //internal abstract fun abstractFun() : Unit defined in rendererTest.TheTrait
-//object : rendererTest.TheClass<jet.Int, jet.Int> defined in rendererTest.TheTrait
-//internal final fun classObjectFunction() : jet.Int defined in rendererTest.TheTrait.<no name provided>
+//class object : rendererTest.TheClass<jet.Int, jet.Int> defined in rendererTest.TheTrait
+//internal final fun classObjectFunction() : jet.Int defined in rendererTest.TheTrait.<class-object-for-TheTrait>

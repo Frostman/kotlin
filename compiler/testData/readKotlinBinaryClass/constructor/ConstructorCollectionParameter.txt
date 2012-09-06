@@ -1,6 +1,0 @@
-namespace test
-
-internal final class test.TestingKotlinCollections : jet.Any {
-    public final /*constructor*/ fun <init>(/*0*/ arguments: java.util.Collection<jet.String>): test.TestingKotlinCollections
-    internal final val arguments: java.util.Collection<jet.String>
-}

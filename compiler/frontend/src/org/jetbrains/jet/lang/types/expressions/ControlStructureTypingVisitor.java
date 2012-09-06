@@ -16,6 +16,7 @@
 
 package org.jetbrains.jet.lang.types.expressions;
 
+import com.intellij.openapi.util.Pair;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.util.PsiTreeUtil;
 import org.jetbrains.annotations.NotNull;
@@ -24,15 +25,14 @@ import org.jetbrains.jet.lang.descriptors.DeclarationDescriptor;
 import org.jetbrains.jet.lang.descriptors.FunctionDescriptor;
 import org.jetbrains.jet.lang.descriptors.SimpleFunctionDescriptor;
 import org.jetbrains.jet.lang.descriptors.VariableDescriptor;
+import org.jetbrains.jet.lang.diagnostics.DiagnosticFactory1;
 import org.jetbrains.jet.lang.diagnostics.Errors;
 import org.jetbrains.jet.lang.psi.*;
 import org.jetbrains.jet.lang.resolve.BindingContext;
 import org.jetbrains.jet.lang.resolve.BindingContextUtils;
-import org.jetbrains.jet.lang.resolve.BindingTrace;
-import org.jetbrains.jet.lang.resolve.BindingTraceContext;
 import org.jetbrains.jet.lang.resolve.DescriptorUtils;
-import org.jetbrains.jet.lang.resolve.calls.CallMaker;
 import org.jetbrains.jet.lang.resolve.calls.OverloadResolutionResults;
+import org.jetbrains.jet.lang.resolve.calls.ResolvedCall;
 import org.jetbrains.jet.lang.resolve.calls.autocasts.DataFlowInfo;
 import org.jetbrains.jet.lang.resolve.name.Name;
 import org.jetbrains.jet.lang.resolve.scopes.JetScope;
@@ -44,6 +44,7 @@ import org.jetbrains.jet.lang.types.*;
 import org.jetbrains.jet.lang.types.checker.JetTypeChecker;
 import org.jetbrains.jet.lang.types.lang.JetStandardClasses;
 import org.jetbrains.jet.lang.types.lang.JetStandardLibrary;
+import org.jetbrains.jet.util.slicedmap.WritableSlice;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -91,8 +92,8 @@ public class ControlStructureTypingVisitor extends ExpressionTypingVisitor {
 
         WritableScopeImpl thenScope = newWritableScopeImpl(context, "Then scope");
         WritableScopeImpl elseScope = newWritableScopeImpl(context, "Else scope");
-        DataFlowInfo thenInfo = DataFlowUtils.extractDataFlowInfoFromCondition(condition, true, thenScope, context);
-        DataFlowInfo elseInfo = DataFlowUtils.extractDataFlowInfoFromCondition(condition, false, null, context);
+        DataFlowInfo thenInfo = DataFlowUtils.extractDataFlowInfoFromCondition(condition, true, context);
+        DataFlowInfo elseInfo = DataFlowUtils.extractDataFlowInfoFromCondition(condition, false, context);
 
         if (elseBranch == null) {
             if (thenBranch != null) {
@@ -161,12 +162,12 @@ public class ControlStructureTypingVisitor extends ExpressionTypingVisitor {
         JetExpression body = expression.getBody();
         if (body != null) {
             WritableScopeImpl scopeToExtend = newWritableScopeImpl(context, "Scope extended in while's condition");
-            DataFlowInfo conditionInfo = condition == null ? context.dataFlowInfo : DataFlowUtils.extractDataFlowInfoFromCondition(condition, true, scopeToExtend, context);
+            DataFlowInfo conditionInfo = condition == null ? context.dataFlowInfo : DataFlowUtils.extractDataFlowInfoFromCondition(condition, true, context);
             context.expressionTypingServices.getBlockReturnedTypeWithWritableScope(scopeToExtend, Collections.singletonList(body), CoercionStrategy.NO_COERCION, context.replaceDataFlowInfo(conditionInfo), context.trace);
         }
         DataFlowInfo dataFlowInfo;
         if (!containsBreak(expression, context)) {
-            dataFlowInfo = DataFlowUtils.extractDataFlowInfoFromCondition(condition, false, null, context);
+            dataFlowInfo = DataFlowUtils.extractDataFlowInfoFromCondition(condition, false, context);
         }
         else {
             dataFlowInfo = context.dataFlowInfo;
@@ -236,7 +237,7 @@ public class ControlStructureTypingVisitor extends ExpressionTypingVisitor {
         checkCondition(conditionScope, condition, context);
         DataFlowInfo dataFlowInfo;
         if (!containsBreak(expression, context)) {
-            dataFlowInfo = DataFlowUtils.extractDataFlowInfoFromCondition(condition, false, null, context);
+            dataFlowInfo = DataFlowUtils.extractDataFlowInfoFromCondition(condition, false, context);
         }
         else {
             dataFlowInfo = context.dataFlowInfo;
@@ -253,7 +254,6 @@ public class ControlStructureTypingVisitor extends ExpressionTypingVisitor {
         if (!isStatement) return DataFlowUtils.illegalStatementType(expression, contextWithExpectedType, facade);
 
         ExpressionTypingContext context = contextWithExpectedType.replaceExpectedType(TypeUtils.NO_EXPECTED_TYPE);
-        JetParameter loopParameter = expression.getLoopParameter();
         JetExpression loopRange = expression.getLoopRange();
         JetType expectedParameterType = null;
         if (loopRange != null) {
@@ -265,36 +265,19 @@ public class ControlStructureTypingVisitor extends ExpressionTypingVisitor {
 
         WritableScope loopScope = newWritableScopeImpl(context, "Scope with for-loop index");
 
+        JetParameter loopParameter = expression.getLoopParameter();
         if (loopParameter != null) {
-            JetTypeReference typeReference = loopParameter.getTypeReference();
-            VariableDescriptor variableDescriptor;
-            if (typeReference != null) {
-                variableDescriptor = context.expressionTypingServices.getDescriptorResolver().resolveLocalVariableDescriptor(context.scope.getContainingDeclaration(), context.scope, loopParameter, context.trace);
-                JetType actualParameterType = variableDescriptor.getType();
-                if (expectedParameterType != null &&
-                        actualParameterType != null &&
-                        !JetTypeChecker.INSTANCE.isSubtypeOf(expectedParameterType, actualParameterType)) {
-                    context.trace.report(TYPE_MISMATCH_IN_FOR_LOOP.on(typeReference, expectedParameterType, actualParameterType));
-                }
-            }
-            else {
-                if (expectedParameterType == null) {
-                    expectedParameterType = ErrorUtils.createErrorType("Error");
-                }
-                variableDescriptor = context.expressionTypingServices.getDescriptorResolver().resolveLocalVariableDescriptor(context.scope.getContainingDeclaration(), loopParameter, expectedParameterType, context.trace);
-            }
-
-            {
-                // http://youtrack.jetbrains.net/issue/KT-527
-
-                VariableDescriptor olderVariable = context.scope.getLocalVariable(variableDescriptor.getName());
-                if (olderVariable != null && DescriptorUtils.isLocal(context.scope.getContainingDeclaration(), olderVariable)) {
-                    PsiElement declaration = BindingContextUtils.descriptorToDeclaration(context.trace.getBindingContext(), variableDescriptor);
-                    context.trace.report(Errors.NAME_SHADOWING.on(declaration, variableDescriptor.getName().getName()));
-                }
-            }
+            VariableDescriptor variableDescriptor = createLoopParameterDescriptor(loopParameter, expectedParameterType, context);
 
             loopScope.addVariableDescriptor(variableDescriptor);
+        }
+        else {
+            JetMultiDeclaration multiParameter = expression.getMultiParameter();
+            if (multiParameter != null && loopRange != null) {
+                JetType elementType = expectedParameterType == null ? ErrorUtils.createErrorType("Loop range has no type") : expectedParameterType;
+                TransientReceiver iteratorNextAsReceiver = new TransientReceiver(elementType);
+                ExpressionTypingUtils.defineLocalVariablesFromMultiDeclaration(loopScope, multiParameter, iteratorNextAsReceiver, loopRange, context);
+            }
         }
 
         JetExpression body = expression.getBody();
@@ -305,56 +288,66 @@ public class ControlStructureTypingVisitor extends ExpressionTypingVisitor {
         return DataFlowUtils.checkType(JetStandardClasses.getUnitType(), expression, contextWithExpectedType, context.dataFlowInfo);
     }
 
+    private static VariableDescriptor createLoopParameterDescriptor(
+            JetParameter loopParameter,
+            JetType expectedParameterType,
+            ExpressionTypingContext context
+    ) {
+        JetTypeReference typeReference = loopParameter.getTypeReference();
+        VariableDescriptor variableDescriptor;
+        if (typeReference != null) {
+            variableDescriptor = context.expressionTypingServices.getDescriptorResolver().resolveLocalVariableDescriptor(context.scope.getContainingDeclaration(), context.scope, loopParameter, context.trace);
+            JetType actualParameterType = variableDescriptor.getType();
+            if (expectedParameterType != null &&
+                    !JetTypeChecker.INSTANCE.isSubtypeOf(expectedParameterType, actualParameterType)) {
+                context.trace.report(TYPE_MISMATCH_IN_FOR_LOOP.on(typeReference, expectedParameterType, actualParameterType));
+            }
+        }
+        else {
+            if (expectedParameterType == null) {
+                expectedParameterType = ErrorUtils.createErrorType("Error");
+            }
+            variableDescriptor = context.expressionTypingServices.getDescriptorResolver().resolveLocalVariableDescriptor(context.scope.getContainingDeclaration(), loopParameter, expectedParameterType, context.trace);
+        }
+
+        {
+            // http://youtrack.jetbrains.net/issue/KT-527
+
+            VariableDescriptor olderVariable = context.scope.getLocalVariable(variableDescriptor.getName());
+            if (olderVariable != null && DescriptorUtils.isLocal(context.scope.getContainingDeclaration(), olderVariable)) {
+                PsiElement declaration = BindingContextUtils.descriptorToDeclaration(context.trace.getBindingContext(), variableDescriptor);
+                context.trace.report(Errors.NAME_SHADOWING.on(declaration, variableDescriptor.getName().getName()));
+            }
+        }
+        return variableDescriptor;
+    }
+
     @Nullable
     /*package*/ static JetType checkIterableConvention(@NotNull ExpressionReceiver loopRange, ExpressionTypingContext context) {
         JetExpression loopRangeExpression = loopRange.getExpression();
 
         // Make a fake call loopRange.iterator(), and try to resolve it
         Name iterator = Name.identifier("iterator");
-        OverloadResolutionResults<FunctionDescriptor> iteratorResolutionResults = resolveFakeCall(loopRange, context, iterator);
+        Pair<Call, OverloadResolutionResults<FunctionDescriptor>> calls = makeAndResolveFakeCall(loopRange, context, iterator);
+        Call iteratorCall = calls.getFirst();
+        OverloadResolutionResults<FunctionDescriptor> iteratorResolutionResults = calls.getSecond();
 
-        // We allow the loop range to be null (nothing happens), so we make the receiver type non-null
-        if (!iteratorResolutionResults.isSuccess()) {
-            ExpressionReceiver nonNullReceiver = new ExpressionReceiver(loopRange.getExpression(), TypeUtils.makeNotNullable(loopRange.getType()));
-            OverloadResolutionResults<FunctionDescriptor> iteratorResolutionResultsWithNonNullReceiver = resolveFakeCall(nonNullReceiver, context, iterator);
-            if (iteratorResolutionResultsWithNonNullReceiver.isSuccess()) {
-                iteratorResolutionResults = iteratorResolutionResultsWithNonNullReceiver;
-            }
-        }
-        
         if (iteratorResolutionResults.isSuccess()) {
-            FunctionDescriptor iteratorFunction = iteratorResolutionResults.getResultingCall().getResultingDescriptor();
+            ResolvedCall<FunctionDescriptor> iteratorResolvedCall = iteratorResolutionResults.getResultingCall();
+            context.trace.record(LOOP_RANGE_ITERATOR_RESOLVED_CALL, loopRangeExpression, iteratorResolvedCall);
+            context.trace.record(LOOP_RANGE_ITERATOR_CALL, loopRangeExpression, iteratorCall);
 
-            context.trace.record(LOOP_RANGE_ITERATOR, loopRangeExpression, iteratorFunction);
-
+            FunctionDescriptor iteratorFunction = iteratorResolvedCall.getResultingDescriptor();
             JetType iteratorType = iteratorFunction.getReturnType();
-            FunctionDescriptor hasNextFunction = checkHasNextFunctionSupport(loopRangeExpression, iteratorType, context);
-            boolean hasNextFunctionSupported = hasNextFunction != null;
-            VariableDescriptor hasNextProperty = checkHasNextPropertySupport(loopRangeExpression, iteratorType, context);
-            boolean hasNextPropertySupported = hasNextProperty != null;
-            if (hasNextFunctionSupported && hasNextPropertySupported && !ErrorUtils.isErrorType(iteratorType)) {
-                // TODO : overload resolution rules impose priorities here???
-                context.trace.report(HAS_NEXT_PROPERTY_AND_FUNCTION_AMBIGUITY.on(loopRangeExpression));
+            JetType hasNextType = checkConventionForIterator(context, loopRangeExpression, iteratorType, "hasNext",
+                                                             HAS_NEXT_FUNCTION_AMBIGUITY, HAS_NEXT_MISSING, HAS_NEXT_FUNCTION_NONE_APPLICABLE,
+                                                             LOOP_RANGE_HAS_NEXT_RESOLVED_CALL);
+            if (hasNextType != null && !isBoolean(hasNextType)) {
+                context.trace.report(HAS_NEXT_FUNCTION_TYPE_MISMATCH.on(loopRangeExpression, hasNextType));
             }
-            else if (!hasNextFunctionSupported && !hasNextPropertySupported) {
-                context.trace.report(HAS_NEXT_MISSING.on(loopRangeExpression));
-            }
-            else {
-                context.trace.record(LOOP_RANGE_HAS_NEXT, loopRange.getExpression(), hasNextFunctionSupported ? hasNextFunction : hasNextProperty);
-            }
-
-            OverloadResolutionResults<FunctionDescriptor> nextResolutionResults = context.resolveExactSignature(new TransientReceiver(iteratorType), Name.identifier("next"), Collections.<JetType>emptyList());
-            if (nextResolutionResults.isAmbiguity()) {
-                context.trace.report(NEXT_AMBIGUITY.on(loopRangeExpression));
-            }
-            else if (nextResolutionResults.isNothing()) {
-                context.trace.report(NEXT_MISSING.on(loopRangeExpression));
-            }
-            else {
-                FunctionDescriptor nextFunction = nextResolutionResults.getResultingCall().getResultingDescriptor();
-                context.trace.record(LOOP_RANGE_NEXT, loopRange.getExpression(), nextFunction);
-                return nextFunction.getReturnType();
-            }
+            return checkConventionForIterator(context, loopRangeExpression, iteratorType, "next",
+                                              NEXT_AMBIGUITY, NEXT_MISSING, NEXT_NONE_APPLICABLE,
+                                              LOOP_RANGE_NEXT_RESOLVED_CALL);
         }
         else {
             if (iteratorResolutionResults.isAmbiguity()) {
@@ -372,50 +365,35 @@ public class ControlStructureTypingVisitor extends ExpressionTypingVisitor {
         return null;
     }
 
-    public static OverloadResolutionResults<FunctionDescriptor> resolveFakeCall(ExpressionReceiver receiver,
-                                                                                ExpressionTypingContext context, Name name) {
-        JetReferenceExpression fake = JetPsiFactory.createSimpleName(context.expressionTypingServices.getProject(), "fake");
-        BindingTrace fakeTrace = new BindingTraceContext();
-        Call call = CallMaker.makeCall(fake, receiver, null, fake, Collections.<ValueArgument>emptyList());
-        return context.replaceBindingTrace(fakeTrace).resolveCallWithGivenName(call, fake, name);
-    }
-
     @Nullable
-    private static FunctionDescriptor checkHasNextFunctionSupport(@NotNull JetExpression loopRange, @NotNull JetType iteratorType, ExpressionTypingContext context) {
-        OverloadResolutionResults<FunctionDescriptor> hasNextResolutionResults = context.resolveExactSignature(new TransientReceiver(iteratorType), Name.identifier("hasNext"), Collections.<JetType>emptyList());
-        if (hasNextResolutionResults.isAmbiguity()) {
-            context.trace.report(HAS_NEXT_FUNCTION_AMBIGUITY.on(loopRange));
+    private static JetType checkConventionForIterator(
+            @NotNull ExpressionTypingContext context,
+            @NotNull JetExpression loopRangeExpression,
+            @NotNull JetType iteratorType,
+            @NotNull String name,
+            @NotNull DiagnosticFactory1<JetExpression, JetType> ambiguity,
+            @NotNull DiagnosticFactory1<JetExpression, JetType> missing,
+            @NotNull DiagnosticFactory1<JetExpression, JetType> noneApplicable,
+            @NotNull WritableSlice<JetExpression, ResolvedCall<FunctionDescriptor>> resolvedCallKey
+    ) {
+        OverloadResolutionResults<FunctionDescriptor> nextResolutionResults = resolveFakeCall(
+                new TransientReceiver(iteratorType), context, Name.identifier(name));
+        if (nextResolutionResults.isAmbiguity()) {
+            context.trace.report(ambiguity.on(loopRangeExpression, iteratorType));
         }
-        else if (hasNextResolutionResults.isNothing()) {
-            return null;
+        else if (nextResolutionResults.isNothing()) {
+            context.trace.report(missing.on(loopRangeExpression, iteratorType));
+        }
+        else if (!nextResolutionResults.isSuccess()) {
+            context.trace.report(noneApplicable.on(loopRangeExpression, iteratorType));
         }
         else {
-            assert hasNextResolutionResults.isSuccess();
-            JetType hasNextReturnType = hasNextResolutionResults.getResultingDescriptor().getReturnType();
-            if (!isBoolean(hasNextReturnType)) {
-                context.trace.report(HAS_NEXT_FUNCTION_TYPE_MISMATCH.on(loopRange, hasNextReturnType));
-            }
+            assert nextResolutionResults.isSuccess();
+            ResolvedCall<FunctionDescriptor> resolvedCall = nextResolutionResults.getResultingCall();
+            context.trace.record(resolvedCallKey, loopRangeExpression, resolvedCall);
+            return resolvedCall.getResultingDescriptor().getReturnType();
         }
-        return hasNextResolutionResults.getResultingCall().getResultingDescriptor();
-    }
-
-    @Nullable
-    private static VariableDescriptor checkHasNextPropertySupport(@NotNull JetExpression loopRange, @NotNull JetType iteratorType, ExpressionTypingContext context) {
-        VariableDescriptor hasNextProperty = DescriptorUtils.filterNonExtensionProperty(iteratorType.getMemberScope().getProperties(Name.identifier("hasNext")));
-        if (hasNextProperty == null) {
-            return null;
-        }
-        else {
-            JetType hasNextReturnType = hasNextProperty.getType();
-            if (hasNextReturnType == null) {
-                // TODO : accessibility
-                context.trace.report(HAS_NEXT_MUST_BE_READABLE.on(loopRange));
-            }
-            else if (!isBoolean(hasNextReturnType)) {
-                context.trace.report(HAS_NEXT_PROPERTY_TYPE_MISMATCH.on(loopRange, hasNextReturnType));
-            }
-        }
-        return hasNextProperty;
+        return null;
     }
 
     @Override

@@ -24,7 +24,6 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.ShutDownTracker;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.CharsetToolkit;
-import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiFileFactory;
 import com.intellij.psi.impl.PsiFileFactoryImpl;
 import com.intellij.testFramework.LightVirtualFile;
@@ -44,6 +43,7 @@ import org.jetbrains.jet.lang.resolve.BindingContext;
 import org.jetbrains.jet.lang.resolve.BindingTrace;
 import org.jetbrains.jet.lang.resolve.java.AnalyzerFacadeForJVM;
 import org.jetbrains.jet.plugin.JetLanguage;
+import org.jetbrains.jet.test.InnerTestClasses;
 import org.jetbrains.jet.test.TestMetadata;
 import org.jetbrains.jet.util.slicedmap.ReadOnlySlice;
 import org.jetbrains.jet.util.slicedmap.SlicedMap;
@@ -169,6 +169,9 @@ public class JetTestUtils {
         }
     };
 
+    @SuppressWarnings("unchecked")
+    private static final Class<? extends TestCase>[] NO_INNER_CLASSES = new Class[0];
+
     private JetTestUtils() {
     }
 
@@ -263,10 +266,10 @@ public class JetTestUtils {
 
     public static final Pattern FILE_PATTERN = Pattern.compile("//\\s*FILE:\\s*(.*)$", Pattern.MULTILINE);
 
-    public static PsiFile createFile(@NonNls String name, String text, @NotNull Project project) {
+    public static JetFile createFile(@NonNls String name, String text, @NotNull Project project) {
         LightVirtualFile virtualFile = new LightVirtualFile(name, JetLanguage.INSTANCE, text);
         virtualFile.setCharset(CharsetToolkit.UTF8_CHARSET);
-        return ((PsiFileFactoryImpl) PsiFileFactory.getInstance(project)).trySetupPsiForFile(virtualFile, JetLanguage.INSTANCE, true, false);
+        return (JetFile) ((PsiFileFactoryImpl) PsiFileFactory.getInstance(project)).trySetupPsiForFile(virtualFile, JetLanguage.INSTANCE, true, false);
     }
 
     public static String doLoadFile(String myFullDataPath, String name) throws IOException {
@@ -279,7 +282,7 @@ public class JetTestUtils {
     }
 
     public static String getFilePath(File file) {
-        return file.getPath().replaceAll("\\\\", "/");
+        return FileUtil.toSystemIndependentName(file.getPath());
     }
 
     public interface TestFileFactory<F> {
@@ -349,14 +352,11 @@ public class JetTestUtils {
         return result.toString();
     }
 
-    public static void compileJavaFile(@NotNull File file, @NotNull File outputDirectory) throws IOException {
+    public static void compileJavaFiles(@NotNull Collection<File> files, List<String> options) throws IOException {
         JavaCompiler javaCompiler = ToolProvider.getSystemJavaCompiler();
         StandardJavaFileManager fileManager = javaCompiler.getStandardFileManager(null, Locale.ENGLISH, Charset.forName("utf-8"));
         try {
-            Iterable<? extends JavaFileObject> javaFileObjectsFromFiles = fileManager.getJavaFileObjectsFromFiles(Collections.singleton(file));
-            List<String> options = Arrays.asList(
-                    "-d", outputDirectory.getPath()
-            );
+            Iterable<? extends JavaFileObject> javaFileObjectsFromFiles = fileManager.getJavaFileObjectsFromFiles(files);
             JavaCompiler.CompilationTask task = javaCompiler.getTask(null, fileManager, null, options, null, javaFileObjectsFromFiles);
 
             Assert.assertTrue(task.call());
@@ -389,19 +389,17 @@ public class JetTestUtils {
         if (files != null) {
             for (File file : files) {
                 if (file.isDirectory()) {
-                    if (recursive) {
-                        assertAllTestsPresentByMetadata(testCaseClass, generatorClassFqName, file, extension, recursive);
+                    if (recursive && containsTestData(file, extension)) {
+                        assertTestClassPresentByMetadata(testCaseClass, generatorClassFqName, file);
                     }
                 }
                 else {
                     if (file.getName().endsWith("." + extension)) {
                         String relativePath = FileUtil.getRelativePath(rootFile, file);
                         if (!filePaths.contains(relativePath)) {
-                            String generatorClassSimpleName = generatorClassFqName.substring(generatorClassFqName.lastIndexOf(".") + 1);
                             Assert.fail("Test data file missing from the generated test class: " +
-                                                        file +
-                                                        "\nPlease re-run the generator: " + generatorClassFqName +
-                                                        "(" + generatorClassSimpleName + ".java:1)");
+                                        file +
+                                        pleaseReRunGenerator(generatorClassFqName));
                         }
                     }
                 }
@@ -409,4 +407,52 @@ public class JetTestUtils {
         }
     }
 
+    private static boolean containsTestData(File dir, String extension) {
+        File[] files = dir.listFiles();
+        assert files != null;
+        for (File file : files) {
+            if (file.isDirectory()) {
+                if (containsTestData(file, extension)) {
+                    return true;
+                }
+            }
+            else {
+                if (FileUtil.getExtension(file.getName()).equals(extension)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static void assertTestClassPresentByMetadata(
+            @NotNull Class<?> outerClass,
+            @NotNull String generatorClassFqName,
+            @NotNull File testDataDir
+    ) {
+        InnerTestClasses innerClassesAnnotation = outerClass.getAnnotation(InnerTestClasses.class);
+        Class<? extends TestCase>[] innerClasses = innerClassesAnnotation == null ? NO_INNER_CLASSES : innerClassesAnnotation.value();
+        for (Class<?> innerClass : innerClasses) {
+            TestMetadata testMetadata = innerClass.getAnnotation(TestMetadata.class);
+            if (testMetadata != null && testMetadata.value().equals(getFilePath(testDataDir))) {
+                return;
+            }
+        }
+        Assert.fail("Test data directory missing from the generated test class: " +
+                    testDataDir +
+                    pleaseReRunGenerator(generatorClassFqName));
+    }
+
+    private static String pleaseReRunGenerator(String generatorClassFqName) {
+        return "\nPlease re-run the generator: " + generatorClassFqName +
+               getLocationFormattedForConsole(generatorClassFqName);
+    }
+
+    private static String getLocationFormattedForConsole(String generatorClassFqName) {
+        return "(" + getSimpleName(generatorClassFqName) + ".java:1)";
+    }
+
+    private static String getSimpleName(String generatorClassFqName) {
+        return generatorClassFqName.substring(generatorClassFqName.lastIndexOf(".") + 1);
+    }
 }

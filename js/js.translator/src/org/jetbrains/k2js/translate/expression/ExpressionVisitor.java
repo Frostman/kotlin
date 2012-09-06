@@ -34,7 +34,6 @@ import org.jetbrains.k2js.translate.operation.BinaryOperationTranslator;
 import org.jetbrains.k2js.translate.operation.UnaryOperationTranslator;
 import org.jetbrains.k2js.translate.reference.*;
 import org.jetbrains.k2js.translate.utils.BindingUtils;
-import org.jetbrains.k2js.translate.utils.TranslationUtils;
 import org.jetbrains.k2js.translate.utils.mutator.AssignToExpressionMutator;
 
 import java.util.List;
@@ -51,48 +50,36 @@ import static org.jetbrains.k2js.translate.utils.mutator.LastExpressionMutator.m
  * @author Pavel Talanov
  */
 public final class ExpressionVisitor extends TranslatorVisitor<JsNode> {
-
     @Override
     @NotNull
     public JsNode visitConstantExpression(@NotNull JetConstantExpression expression,
             @NotNull TranslationContext context) {
-        CompileTimeConstant<?> compileTimeValue =
-                context.bindingContext().get(BindingContext.COMPILE_TIME_VALUE, expression);
+        CompileTimeConstant<?> compileTimeValue = context.bindingContext().get(BindingContext.COMPILE_TIME_VALUE, expression);
         assert compileTimeValue != null;
+
         if (compileTimeValue instanceof NullValue) {
-            return context.program().getNullLiteral();
+            return JsLiteral.NULL;
         }
+
         Object value = compileTimeValue.getValue();
-        if (value instanceof Integer) {
-            return context.program().getNumberLiteral((Integer) value);
+        if (value instanceof Integer || value instanceof Short || value instanceof Byte) {
+            return context.program().getNumberLiteral(((Number) value).intValue());
         }
-        if (value instanceof Boolean) {
-            return context.program().getBooleanLiteral((Boolean) value);
+        else if (value instanceof Number) {
+            return context.program().getNumberLiteral(((Number) value).doubleValue());
+        }
+        else if (value instanceof Boolean) {
+            return JsLiteral.getBoolean((Boolean) value);
         }
 
         //TODO: test
-        if (value instanceof Float) {
-            return context.program().getNumberLiteral((Float) value);
-        }
-        if (value instanceof Double) {
-            return context.program().getNumberLiteral((Double) value);
-        }
         if (value instanceof String) {
             return context.program().getStringLiteral((String) value);
         }
         if (value instanceof Character) {
             return context.program().getStringLiteral(value.toString());
         }
-        if (value instanceof Byte) {
-            return context.program().getNumberLiteral((Byte) value);
-        }
-        if (value instanceof Short) {
-            return context.program().getNumberLiteral((Short) value);
-        }
-        if (value instanceof Long) {
-            throw new IllegalStateException(message(expression, "Unsupported long constant"));
-        }
-        throw new IllegalStateException(message(expression, "Unsupported constant expression"));
+        throw new AssertionError(message(expression, "Unsupported constant expression"));
     }
 
     @Override
@@ -160,17 +147,29 @@ public final class ExpressionVisitor extends TranslatorVisitor<JsNode> {
     @Override
     @NotNull
     public JsNode visitIfExpression(@NotNull JetIfExpression expression, @NotNull TranslationContext context) {
-        JsIf ifStatement = translateAsIfStatement(expression, context);
-        if (BindingUtils.isStatement(context.bindingContext(), expression)) {
-            return ifStatement;
+        JsExpression testExpression = translateConditionExpression(expression.getCondition(), context);
+        JetExpression thenExpression = expression.getThen();
+        JetExpression elseExpression = expression.getElse();
+        assert thenExpression != null;
+        JsNode thenNode = thenExpression.accept(this, context);
+        JsNode elseNode = elseExpression == null ? null : elseExpression.accept(this, context);
+
+        boolean isKotlinStatement = BindingUtils.isStatement(context.bindingContext(), expression);
+        boolean canBeJsExpression = thenNode instanceof JsExpression && elseNode instanceof JsExpression;
+        if (!isKotlinStatement && canBeJsExpression) {
+            return new JsConditional(testExpression, convertToExpression(thenNode), convertToExpression(elseNode));
         }
-        TemporaryVariable result = context.declareTemporary(context.program().getNullLiteral());
-        AssignToExpressionMutator saveResultToTemporaryMutator =
-                new AssignToExpressionMutator(result.reference());
-        JsNode mutatedIfStatement = mutateLastExpression(ifStatement, saveResultToTemporaryMutator);
-        JsStatement resultingStatement = convertToStatement(mutatedIfStatement);
-        context.addStatementToCurrentBlock(resultingStatement);
-        return result.reference();
+        else {
+            JsIf ifStatement = new JsIf(testExpression, convertToStatement(thenNode), elseNode == null ? null : convertToStatement(elseNode));
+            if (isKotlinStatement) {
+                return ifStatement;
+            }
+
+            TemporaryVariable result = context.declareTemporary(null);
+            AssignToExpressionMutator saveResultToTemporaryMutator = new AssignToExpressionMutator(result.reference());
+            context.addStatementToCurrentBlock(mutateLastExpression(ifStatement, saveResultToTemporaryMutator));
+            return result.reference();
+        }
     }
 
     @Override
@@ -180,26 +179,6 @@ public final class ExpressionVisitor extends TranslatorVisitor<JsNode> {
         return ReferenceTranslator.translateSimpleName(expression, context);
     }
 
-
-    @NotNull
-    private JsIf translateAsIfStatement(@NotNull JetIfExpression expression,
-            @NotNull TranslationContext context) {
-        JsIf result = new JsIf();
-        result.setIfExpr(translateConditionExpression(expression.getCondition(), context));
-        result.setThenStmt(translateNullableExpressionAsNotNullStatement(expression.getThen(), context));
-        result.setElseStmt(translateElseAsStatement(expression, context));
-        return result;
-    }
-
-    @Nullable
-    private JsStatement translateElseAsStatement(@NotNull JetIfExpression expression,
-            @NotNull TranslationContext context) {
-        JetExpression jetElse = expression.getElse();
-        if (jetElse == null) {
-            return null;
-        }
-        return convertToStatement(jetElse.accept(this, context));
-    }
 
     @NotNull
     private JsStatement translateNullableExpressionAsNotNullStatement(@Nullable JetExpression nullableExpression,
@@ -227,20 +206,19 @@ public final class ExpressionVisitor extends TranslatorVisitor<JsNode> {
         return convertToExpression(expression.accept(this, context));
     }
 
-    //NOTE: since JsWhile and JsDoWhile do not have an ancestor, cannot avoid duplication here
     @Override
     @NotNull
     public JsNode visitWhileExpression(@NotNull JetWhileExpression expression, @NotNull TranslationContext context) {
-        JsWhile result = new JsWhile();
-        result.setCondition(translateConditionExpression(expression.getCondition(), context));
-        result.setBody(translateNullableExpressionAsNotNullStatement(expression.getBody(), context));
-        return result;
+        return createWhile(new JsWhile(), expression, context);
     }
 
     @Override
     @NotNull
     public JsNode visitDoWhileExpression(@NotNull JetDoWhileExpression expression, @NotNull TranslationContext context) {
-        JsDoWhile result = new JsDoWhile();
+        return createWhile(new JsDoWhile(), expression, context);
+    }
+
+    private JsNode createWhile(@NotNull JsWhile result, @NotNull JetWhileExpressionBase expression, @NotNull TranslationContext context) {
         result.setCondition(translateConditionExpression(expression.getCondition(), context));
         result.setBody(translateNullableExpressionAsNotNullStatement(expression.getBody(), context));
         return result;
@@ -343,17 +321,15 @@ public final class ExpressionVisitor extends TranslatorVisitor<JsNode> {
     @Override
     @NotNull
     public JsNode visitFunctionLiteralExpression(@NotNull JetFunctionLiteralExpression expression,
-            @NotNull TranslationContext context) {
-        return Translation.functionTranslator(expression, context).translateAsLiteral();
+                                                 @NotNull TranslationContext context) {
+        return context.literalFunctionTranslator().translate(expression);
     }
 
     @Override
     @NotNull
     public JsNode visitThisExpression(@NotNull JetThisExpression expression,
             @NotNull TranslationContext context) {
-        DeclarationDescriptor descriptor =
-                getDescriptorForReferenceExpression(context.bindingContext(), expression.getInstanceReference());
-        return TranslationUtils.getThisObject(context, descriptor);
+        return context.getThisObject(getDescriptorForReferenceExpression(context.bindingContext(), expression.getInstanceReference()));
     }
 
     @Override
@@ -401,7 +377,7 @@ public final class ExpressionVisitor extends TranslatorVisitor<JsNode> {
     @NotNull
     public JsNode visitObjectLiteralExpression(@NotNull JetObjectLiteralExpression expression,
             @NotNull TranslationContext context) {
-        return ClassTranslator.generateObjectLiteralExpression(expression, context);
+        return ClassTranslator.generateObjectLiteral(expression, context);
     }
 
     @Override
@@ -411,7 +387,7 @@ public final class ExpressionVisitor extends TranslatorVisitor<JsNode> {
         JetObjectDeclarationName objectDeclarationName = getObjectDeclarationName(expression);
         DeclarationDescriptor descriptor = getDescriptorForElement(context.bindingContext(), objectDeclarationName);
         JsName propertyName = context.getNameForDescriptor(descriptor);
-        JsExpression value = ClassTranslator.generateClassCreationExpression(expression, context);
+        JsExpression value = ClassTranslator.generateClassCreation(expression, context);
         return newVar(propertyName, value);
     }
 

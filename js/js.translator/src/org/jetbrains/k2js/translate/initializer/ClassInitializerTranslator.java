@@ -17,7 +17,6 @@
 package org.jetbrains.k2js.translate.initializer;
 
 import com.google.dart.compiler.backend.js.ast.*;
-import com.google.dart.compiler.util.AstUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.lang.descriptors.ConstructorDescriptor;
@@ -35,7 +34,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.jetbrains.k2js.translate.utils.BindingUtils.*;
-import static org.jetbrains.k2js.translate.utils.JsAstUtils.*;
+import static org.jetbrains.k2js.translate.utils.JsAstUtils.convertToStatement;
+import static org.jetbrains.k2js.translate.utils.JsAstUtils.setParameters;
 import static org.jetbrains.k2js.translate.utils.PsiUtils.getPrimaryConstructorParameters;
 import static org.jetbrains.k2js.translate.utils.TranslationUtils.translateArgumentList;
 
@@ -64,7 +64,7 @@ public final class ClassInitializerTranslator extends AbstractTranslator {
         // for properties declared as constructor parameters
         setParameters(result, translatePrimaryConstructorParameters());
         mayBeAddCallToSuperMethod(result);
-        initializerStatements.addAll(new InitializerVisitor().traverseClass(classDeclaration, context()));
+        (new InitializerVisitor(initializerStatements)).traverseClass(classDeclaration, context());
         result.getBody().getStatements().addAll(initializerStatements);
         return result;
     }
@@ -82,18 +82,16 @@ public final class ClassInitializerTranslator extends AbstractTranslator {
 
         //TODO: can be problematic to maintain
         if (context().isEcma5()) {
-            JsName ref = context().jsScope().declareName("$initializer");
+            JsName ref = context().scope().declareName(Namer.CALLEE_NAME);
             initializer.setName(ref);
-            JsInvocation call = new JsInvocation();
-            call.setQualifier(AstUtil.newNameRef(AstUtil.newNameRef(ref.makeRef(), "baseInitializer"), "call"));
-            call.getArguments().add(new JsThisRef());
+            JsInvocation call = new JsInvocation(new JsNameRef("call", new JsNameRef("baseInitializer", ref.makeRef())));
+            call.getArguments().add(JsLiteral.THIS);
             call.getArguments().addAll(arguments);
             initializerStatements.add(call.makeStmt());
         }
         else {
-            JsName superMethodName = context().jsScope().declareName(Namer.superMethodName());
-            superMethodName.setObfuscatable(false);
-            initializerStatements.add(convertToStatement(newInvocation(thisQualifiedReference(superMethodName), arguments)));
+            JsName superMethodName = context().scope().declareName(Namer.superMethodName());
+            initializerStatements.add(convertToStatement(new JsInvocation(new JsNameRef(superMethodName, JsLiteral.THIS), arguments)));
         }
     }
 

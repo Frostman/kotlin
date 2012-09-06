@@ -30,6 +30,9 @@ import org.jetbrains.jet.cli.jvm.JVMConfigurationKeys;
 import org.jetbrains.jet.cli.jvm.compiler.JetCoreEnvironment;
 import org.jetbrains.jet.cli.jvm.compiler.KotlinToJVMBytecodeCompiler;
 import org.jetbrains.jet.codegen.forTestCompile.ForTestCompileRuntime;
+import org.jetbrains.jet.codegen.state.GenerationState;
+import org.jetbrains.jet.codegen.state.JetTypeMapper;
+import org.jetbrains.jet.codegen.state.JetTypeMapperMode;
 import org.jetbrains.jet.config.CommonConfigurationKeys;
 import org.jetbrains.jet.config.CompilerConfiguration;
 import org.jetbrains.jet.lang.descriptors.ClassDescriptor;
@@ -91,7 +94,7 @@ public class TestlibTest extends CodegenTestCase {
                     new URLClassLoader(new URL[]{ForTestCompileRuntime.runtimeJarForTests().toURI().toURL(), junitJar.toURI().toURL()},
                                        TestCase.class.getClassLoader()));
 
-            JetTypeMapper typeMapper = generationState.getInjector().getJetTypeMapper();
+            JetTypeMapper typeMapper = generationState.getTypeMapper();
             TestSuite suite = new TestSuite("stdlib_test");
             try {
                 for(JetFile jetFile : myEnvironment.getSourceFiles()) {
@@ -104,9 +107,9 @@ public class TestlibTest extends CodegenTestCase {
                             DescriptorUtils.addSuperTypes(descriptor.getDefaultType(), allSuperTypes);
 
                             for(JetType type : allSuperTypes) {
-                                String internalName = typeMapper.mapType(type, MapTypeMode.IMPL).getInternalName();
+                                String internalName = typeMapper.mapType(type, JetTypeMapperMode.IMPL).getInternalName();
                                 if(internalName.equals("junit/framework/Test")) {
-                                    String name = typeMapper.mapType(descriptor.getDefaultType(), MapTypeMode.IMPL).getInternalName();
+                                    String name = typeMapper.mapType(descriptor.getDefaultType(), JetTypeMapperMode.IMPL).getInternalName();
                                     System.out.println(name);
                                     Class<TestCase> aClass = (Class<TestCase>) loader.loadClass(name.replace('/', '.'));
                                     if ((aClass.getModifiers() & Modifier.ABSTRACT) == 0

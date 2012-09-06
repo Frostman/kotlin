@@ -16,15 +16,9 @@
 
 package org.jetbrains.jet.codegen;
 
-import com.intellij.openapi.util.io.FileUtil;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.jet.CompileCompilerDependenciesTest;
 import org.jetbrains.jet.ConfigurationKind;
-import org.jetbrains.jet.JetTestUtils;
-import org.jetbrains.jet.TestJdkKind;
-import org.jetbrains.jet.cli.jvm.compiler.JetCoreEnvironment;
 
-import java.io.File;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
@@ -40,32 +34,32 @@ public class FunctionGenTest extends CodegenTestCase {
 
     public void testDefaultArgs() throws Exception {
         blackBoxFile("functions/defaultargs.jet");
-//        System.out.println(generateToText());
+        //        System.out.println(generateToText());
     }
 
     public void testDefaultArgs1() throws Exception {
         blackBoxFile("functions/defaultargs1.jet");
-//        System.out.println(generateToText());
+        //        System.out.println(generateToText());
     }
 
     public void testDefaultArgs2() throws Exception {
         blackBoxFile("functions/defaultargs2.jet");
-//        System.out.println(generateToText());
+        //        System.out.println(generateToText());
     }
 
     public void testDefaultArgs3() throws Exception {
         blackBoxFile("functions/defaultargs3.jet");
-//        System.out.println(generateToText());
+        //        System.out.println(generateToText());
     }
 
     public void testDefaultArgs4() throws Exception {
         blackBoxFile("functions/defaultargs4.jet");
-//        System.out.println(generateToText());
+        //        System.out.println(generateToText());
     }
 
     public void testDefaultArgs5() throws Exception {
         blackBoxFile("functions/defaultargs5.jet");
-//        System.out.println(generateToText());
+        //        System.out.println(generateToText());
     }
 
     public void testDefaultArgs6() {
@@ -78,50 +72,64 @@ public class FunctionGenTest extends CodegenTestCase {
 
     public void testNoThisNoClosure() throws Exception {
         blackBoxFile("functions/nothisnoclosure.jet");
-//        System.out.println(generateToText());
+        //        System.out.println(generateToText());
     }
 
-    public void testAnyEqualsNullable () throws InvocationTargetException, IllegalAccessException {
+    public void testAnyEqualsNullable() throws InvocationTargetException, IllegalAccessException {
         loadText("fun foo(x: Any?) = x.equals(\"lala\")");
-//        System.out.println(generateToText());
+        //        System.out.println(generateToText());
         Method foo = generateFunction();
         assertTrue((Boolean) foo.invoke(null, "lala"));
         assertFalse((Boolean) foo.invoke(null, "mama"));
     }
 
-    public void testAnyEquals () throws InvocationTargetException, IllegalAccessException {
+    public void testNoRefToOuter() throws InvocationTargetException, IllegalAccessException, NoSuchMethodException, InstantiationException {
+        loadText("class A() { fun f() : ()->String { val s = \"OK\"; return { -> s } } }");
+        //        System.out.println(generateToText());
+        Class foo = generateClass("A");
+        final Object obj = foo.newInstance();
+        final Method f = foo.getMethod("f");
+        final Object closure = f.invoke(obj);
+        final Class<? extends Object> aClass = closure.getClass();
+        final Field[] fields = aClass.getFields();
+        assertEquals(1, fields.length);
+        assertEquals("$s", fields[0].getName());
+    }
+
+    public void testAnyEquals() throws InvocationTargetException, IllegalAccessException {
         loadText("fun foo(x: Any) = x.equals(\"lala\")");
-//        System.out.println(generateToText());
+        //        System.out.println(generateToText());
         Method foo = generateFunction();
         assertTrue((Boolean) foo.invoke(null, "lala"));
         assertFalse((Boolean) foo.invoke(null, "mama"));
     }
 
-    public void testKt395 () {
+    public void testKt395() {
         blackBoxFile("regressions/kt395.jet");
     }
 
-    public void testKt785 () {
+    public void testKt785() {
         blackBoxFile("regressions/kt785.jet");
     }
 
-    public void testKt873 () {
+    public void testKt873() {
         blackBoxFile("regressions/kt873.kt");
     }
 
-    public void testKt1413 () {
+    public void testKt1413() {
         blackBoxFile("regressions/kt1413.kt");
     }
 
-    public void testKt1199 () {
+    public void testKt1199() {
         blackBoxFile("regressions/kt1199.kt");
+        System.out.println(generateToText());
     }
 
-    public void testFunction () throws InvocationTargetException, IllegalAccessException {
+    public void testFunction() throws InvocationTargetException, IllegalAccessException {
         blackBoxFile("functions/functionExpression.jet");
     }
 
-    public void testLocalFunction () throws InvocationTargetException, IllegalAccessException {
+    public void testLocalFunction() throws InvocationTargetException, IllegalAccessException {
         blackBoxFile("functions/localFunction.kt");
     }
 
@@ -149,26 +157,30 @@ public class FunctionGenTest extends CodegenTestCase {
         blackBoxFile("regressions/kt2270.kt");
     }
 
-    public static class WithJavaFunctionGenTest extends CodegenTestCase {
-        private void blackBoxFileWithJava(@NotNull String ktFile) throws Exception {
-            File javaClassesTempDirectory = new File(FileUtil.getTempDirectory(), "java-classes");
-            JetTestUtils.mkdirs(javaClassesTempDirectory);
-            JetTestUtils.compileJavaFile(
-                    new File("compiler/testData/codegen/" + ktFile.replaceFirst("\\.kt$", ".java")),
-                    javaClassesTempDirectory);
+    public void testK1649_1() {
+        loadFile("regressions/kt1649_1.kt");
+        generateToText();
+    }
 
-            myEnvironment = new JetCoreEnvironment(getTestRootDisposable(), CompileCompilerDependenciesTest.compilerConfigurationForTests(
-                    ConfigurationKind.JDK_ONLY, TestJdkKind.MOCK_JDK, JetTestUtils.getAnnotationsJar(), javaClassesTempDirectory));
+    public void testK1649_2() {
+        loadFile("regressions/kt1649_2.kt");
+        generateToText();
+    }
 
-            blackBoxFile(ktFile);
-        }
+    public void testKt1038() {
+        blackBoxFile("regressions/kt1038.kt");
+    }
 
-        public void testReferencesStaticInnerClassMethod() throws Exception {
-            blackBoxFileWithJava("functions/referencesStaticInnerClassMethod.kt");
-        }
 
-        public void testReferencesStaticInnerClassMethodTwoLevels() throws Exception {
-            blackBoxFileWithJava("functions/referencesStaticInnerClassMethodL2.kt");
-        }
+    public void testReferencesStaticInnerClassMethod() throws Exception {
+        blackBoxFileWithJava("functions/referencesStaticInnerClassMethod.kt");
+    }
+
+    public void testReferencesStaticInnerClassMethodTwoLevels() throws Exception {
+        blackBoxFileWithJava("functions/referencesStaticInnerClassMethodL2.kt");
+    }
+
+    public void testRemoveInIterator() throws Exception {
+        blackBoxFileWithJava("functions/removeInIterator.kt");
     }
 }

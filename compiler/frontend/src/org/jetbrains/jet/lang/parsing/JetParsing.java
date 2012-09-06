@@ -54,6 +54,7 @@ public class JetParsing extends AbstractJetParsing {
     private static final TokenSet TYPE_PARAMETER_GT_RECOVERY_SET = TokenSet.create(WHERE_KEYWORD, LPAR, COLON, LBRACE, GT);
     private static final TokenSet PARAMETER_NAME_RECOVERY_SET = TokenSet.create(COLON, EQ, COMMA, RPAR);
     private static final TokenSet NAMESPACE_NAME_RECOVERY_SET = TokenSet.create(DOT, EOL_OR_SEMICOLON);
+    private static final TokenSet IMPORT_RECOVERY_SET = TokenSet.create(AS_KEYWORD, DOT, EOL_OR_SEMICOLON);
     /*package*/ static final TokenSet TYPE_REF_FIRST = TokenSet.create(LBRACKET, IDENTIFIER, FUN_KEYWORD, LPAR, CAPITALIZED_THIS_KEYWORD, HASH);
     private static final TokenSet RECEIVER_TYPE_TERMINATORS = TokenSet.create(DOT, SAFE_ACCESS);
 
@@ -220,11 +221,12 @@ public class JetParsing extends AbstractJetParsing {
         PsiBuilder.Marker reference = mark();
         expect(IDENTIFIER, "Expecting qualified name");
         reference.done(REFERENCE_EXPRESSION);
+
         while (at(DOT) && lookahead(1) != MUL) {
             advance(); // DOT
 
             reference = mark();
-            if (expect(IDENTIFIER, "Qualified name must be a '.'-separated identifier list", TokenSet.create(AS_KEYWORD, DOT, SEMICOLON))) {
+            if (expect(IDENTIFIER, "Qualified name must be a '.'-separated identifier list", IMPORT_RECOVERY_SET)) {
                 reference.done(REFERENCE_EXPRESSION);
             }
             else {
@@ -541,7 +543,7 @@ public class JetParsing extends AbstractJetParsing {
 
     /*
      * enumEntry
-     *   : modifiers SimpleName typeParameters? primaryConstructorParameters? (":" initializer{","})? typeConstraints classBody?
+     *   : modifiers SimpleName (":" initializer{","})? classBody?
      *   ;
      */
     private void parseEnumEntry() {
@@ -551,19 +553,11 @@ public class JetParsing extends AbstractJetParsing {
         advance(); // IDENTIFIER
         nameAsDeclaration.done(OBJECT_DECLARATION_NAME);
 
-        boolean typeParametersDeclared = parseTypeParameterList(TokenSet.create(COLON, LPAR, SEMICOLON, LBRACE));
-
-        if (at(LPAR)) {
-            parseValueParameterList(false, TokenSet.create(COLON, SEMICOLON, LBRACE));
-        }
-
         if (at(COLON)) {
             advance(); // COLON
 
             parseInitializerList();
         }
-
-        parseTypeConstraintsGuarded(typeParametersDeclared);
 
         if (at(LBRACE)) {
             parseClassBody();
@@ -799,10 +793,14 @@ public class JetParsing extends AbstractJetParsing {
     }
 
     /*
+     * variableDeclarationEntry
+     *   : SimpleName (":" type)?
+     *   ;
+     *
      * property
      *   : modifiers ("val" | "var")
-     *       typeParameters? (type "." | attributes)?
-     *       SimpleName (":" type)?
+     *       typeParameters? (type "." | annotations)?
+     *       ("(" variableDeclarationEntry{","} ")" | variableDeclarationEntry)
      *       typeConstraints
      *       ("=" element SEMI?)?
      *       (getter? setter? | setter? getter?) SEMI?
@@ -812,7 +810,7 @@ public class JetParsing extends AbstractJetParsing {
         return parseProperty(false);
     }
 
-    IElementType parseProperty(boolean local) {
+    public IElementType parseProperty(boolean local) {
         if (at(VAL_KEYWORD) || at(VAR_KEYWORD)) {
             advance(); // VAL_KEYWORD or VAR_KEYWORD
         }
@@ -841,15 +839,32 @@ public class JetParsing extends AbstractJetParsing {
                     }
                 }));
 
+        PsiBuilder.Marker receiver = mark();
         parseReceiverType("property", propertyNameFollow, lastDot);
+
+        boolean multiDeclaration = at(LPAR);
+        boolean receiverTypeDeclared = lastDot != -1;
+
+        errorIf(receiver, multiDeclaration && receiverTypeDeclared, "Receiver type is not allowed on a multi-declaration");
+
+        if (multiDeclaration) {
+            PsiBuilder.Marker multiDecl = mark();
+            parseMultiDeclarationName(propertyNameFollow);
+            errorIf(multiDecl, !local, "Multi-declarations are only allowed for local variables/values");
+        }
+        else {
+            parseFunctionOrPropertyName(receiverTypeDeclared, "property", propertyNameFollow);
+        }
 
         myBuilder.restoreJoiningComplexTokensState();
 
         if (at(COLON)) {
+            PsiBuilder.Marker type = mark();
             advance(); // COLON
             if (!parseIdeTemplate()) {
                 parseTypeRef();
             }
+            errorIf(type, multiDeclaration, "Type annotations are not allowed on multi-declarations");
         }
 
         parseTypeConstraintsGuarded(typeParametersDeclared);
@@ -881,8 +896,44 @@ public class JetParsing extends AbstractJetParsing {
             }
         }
 
+        return multiDeclaration ? MULTI_VARIABLE_DECLARATION : PROPERTY;
+    }
 
-        return PROPERTY;
+    /*
+     * (SimpleName (":" type)){","}
+     */
+    public void parseMultiDeclarationName(TokenSet follow) {
+        // Parsing multi-name, e.g.
+        //   val (a, b) = foo()
+        myBuilder.disableNewlines();
+        advance(); // LPAR
+
+        TokenSet recoverySet = TokenSet.orSet(PARAMETER_NAME_RECOVERY_SET, follow);
+        if (!atSet(follow)) {
+            while (true) {
+                if (at(COMMA)) {
+                    errorAndAdvance("Expecting a name");
+                }
+                else if (at(RPAR)) {
+                    error("Expecting a name");
+                    break;
+                }
+                PsiBuilder.Marker property = mark();
+                expect(IDENTIFIER, "Expecting a name", recoverySet);
+
+                if (at(COLON)) {
+                    advance(); // COLON
+                    parseTypeRef(follow);
+                }
+                property.done(MULTI_VARIABLE_DECLARATION_ENTRY);
+
+                if (!at(COMMA)) break;
+                advance(); // COMMA
+            }
+        }
+
+        expect(RPAR, "Expecting ')'", follow);
+        myBuilder.restoreNewlinesState();
     }
 
     /*
@@ -982,7 +1033,12 @@ public class JetParsing extends AbstractJetParsing {
 
         myBuilder.disableJoiningComplexTokens();
         int lastDot = findLastBefore(RECEIVER_TYPE_TERMINATORS, TokenSet.create(LPAR), true);
-        parseReceiverType("function", TokenSet.create(LT, LPAR, COLON, EQ), lastDot);
+
+        TokenSet functionNameFollow = TokenSet.create(LT, LPAR, COLON, EQ);
+        parseReceiverType("function", functionNameFollow, lastDot);
+
+        parseFunctionOrPropertyName(lastDot != -1, "function", functionNameFollow);
+
         myBuilder.restoreJoiningComplexTokensState();
 
         TokenSet valueParametersFollow = TokenSet.create(COLON, EQ, LBRACE, SEMICOLON, RPAR);
@@ -990,12 +1046,7 @@ public class JetParsing extends AbstractJetParsing {
         if (at(LT)) {
             PsiBuilder.Marker error = mark();
             parseTypeParameterList(TokenSet.orSet(TokenSet.create(LPAR), valueParametersFollow));
-            if (typeParameterListOccurred) {
-                error.error("Only one type parameter list is allowed for a function"); // TODO : discuss
-            }
-            else {
-                error.drop();
-            }
+            errorIf(error, typeParameterListOccurred, "Only one type parameter list is allowed for a function");
             typeParameterListOccurred = true;
         }
 
@@ -1022,16 +1073,11 @@ public class JetParsing extends AbstractJetParsing {
     }
 
     /*
-     * :
      *   (type "." | attributes)?
      */
     private void parseReceiverType(String title, TokenSet nameFollow, int lastDot) {
         if (lastDot == -1) { // There's no explicit receiver type specified
             parseAnnotations(false);
-
-            if (!parseIdeTemplate()) {
-                expect(IDENTIFIER, "Expecting " + title + " name or receiver type", nameFollow);
-            }
         }
         else {
             if (parseIdeTemplate()) {
@@ -1048,6 +1094,19 @@ public class JetParsing extends AbstractJetParsing {
                 }
             }
 
+        }
+    }
+
+    /*
+     * IDENTIFIER
+     */
+    private void parseFunctionOrPropertyName(boolean receiverFound, String title, TokenSet nameFollow) {
+        if (!receiverFound) {
+            if (!parseIdeTemplate()) {
+                expect(IDENTIFIER, "Expecting " + title + " name or receiver type", nameFollow);
+            }
+        }
+        else {
             if (!parseIdeTemplate()) {
                 expect(IDENTIFIER, "Expecting " + title + " name", nameFollow);
             }
@@ -1186,12 +1245,7 @@ public class JetParsing extends AbstractJetParsing {
     private void parseTypeConstraintsGuarded(boolean typeParameterListOccurred) {
         PsiBuilder.Marker error = mark();
         boolean constraints = parseTypeConstraints();
-        if (constraints && !typeParameterListOccurred) {
-            error.error("Type constraints are not allowed when no type parameters declared");
-        }
-        else {
-            error.drop();
-        }
+        errorIf(error, constraints && !typeParameterListOccurred, "Type constraints are not allowed when no type parameters declared");
     }
 
     private boolean parseTypeConstraints() {

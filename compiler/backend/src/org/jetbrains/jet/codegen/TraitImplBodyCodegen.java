@@ -16,35 +16,22 @@
 
 package org.jetbrains.jet.codegen;
 
-import org.jetbrains.jet.lang.descriptors.ClassDescriptor;
-import org.jetbrains.jet.lang.descriptors.ClassKind;
+import org.jetbrains.jet.codegen.context.CodegenContext;
+import org.jetbrains.jet.codegen.state.GenerationState;
+import org.jetbrains.jet.codegen.state.JetTypeMapperMode;
 import org.jetbrains.jet.lang.psi.JetClassOrObject;
-import org.jetbrains.jet.lang.resolve.DescriptorUtils;
-import org.jetbrains.jet.lang.types.JetType;
-import org.jetbrains.jet.lang.types.lang.JetStandardClasses;
-import org.jetbrains.asm4.Opcodes;
 
-import java.util.List;
+import static org.jetbrains.asm4.Opcodes.*;
 
 public class TraitImplBodyCodegen extends ClassBodyCodegen {
     public TraitImplBodyCodegen(JetClassOrObject aClass, CodegenContext context, ClassBuilder v, GenerationState state) {
         super(aClass, context, v, state);
     }
 
-    static JetType getSuperClass(ClassDescriptor classDescriptor) {
-        final List<ClassDescriptor> superclassDescriptors = DescriptorUtils.getSuperclassDescriptors(classDescriptor);
-        for (ClassDescriptor descriptor : superclassDescriptors) {
-            if (descriptor.getKind() != ClassKind.TRAIT) {
-                return descriptor.getDefaultType();
-            }
-        }
-        return JetStandardClasses.getAnyType();
-    }
-
     @Override
     protected void generateDeclaration() {
-        v.defineClass(myClass, Opcodes.V1_6,
-                      Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL/*| Opcodes.ACC_SUPER*/,
+        v.defineClass(myClass, V1_6,
+                      ACC_PUBLIC | ACC_FINAL/*| Opcodes.ACC_SUPER*/,
                       jvmName(),
                       null,
                       "java/lang/Object",
@@ -54,6 +41,6 @@ public class TraitImplBodyCodegen extends ClassBodyCodegen {
     }
 
     private String jvmName() {
-        return state.getInjector().getJetTypeMapper().mapType(descriptor.getDefaultType(), MapTypeMode.TRAIT_IMPL).getInternalName();
+        return typeMapper.mapType(descriptor.getDefaultType(), JetTypeMapperMode.TRAIT_IMPL).getInternalName();
     }
 }

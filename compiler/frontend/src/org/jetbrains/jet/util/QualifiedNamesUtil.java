@@ -1,4 +1,5 @@
 /*
+/*
  * Copyright 2010-2012 JetBrains s.r.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,8 +19,8 @@ package org.jetbrains.jet.util;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.jet.lang.resolve.name.FqName;
 import org.jetbrains.jet.lang.resolve.ImportPath;
+import org.jetbrains.jet.lang.resolve.name.FqName;
 import org.jetbrains.jet.lang.resolve.name.Name;
 
 /**
@@ -33,13 +34,18 @@ public final class QualifiedNamesUtil {
     }
 
     public static boolean isSubpackageOf(@NotNull final FqName subpackageName, @NotNull FqName packageName) {
-        return subpackageName.equals(packageName) ||
-               (subpackageName.getFqName().startsWith(packageName.getFqName()) && subpackageName.getFqName().charAt(packageName.getFqName().length()) == '.');
-    }
+        if (subpackageName.equals(packageName)) {
+            return true;
+        }
 
-    public static boolean isShortNameForFQN(@NotNull final String name, @NotNull final FqName fqn) {
-        return fqn.getFqName().equals(name) ||
-               (fqn.getFqName().endsWith(name) && fqn.getFqName().charAt(fqn.getFqName().length() - name.length() - 1) == '.');
+        if (packageName.isRoot()) {
+            return true;
+        }
+
+        String subpackageNameStr = subpackageName.getFqName();
+        String packageNameStr = packageName.getFqName();
+
+        return (subpackageNameStr.startsWith(packageNameStr) && subpackageNameStr.charAt(packageNameStr.length()) == '.');
     }
 
     public static boolean isOneSegmentFQN(@NotNull final String fqn) {
@@ -52,16 +58,6 @@ public final class QualifiedNamesUtil {
 
     public static boolean isOneSegmentFQN(@NotNull FqName fqn) {
         return isOneSegmentFQN(fqn.getFqName());
-    }
-
-    @NotNull
-    public static Name fqnToShortName(@NotNull FqName fqn) {
-        return getLastSegment(fqn);
-    }
-
-    @NotNull
-    public static Name getLastSegment(@NotNull FqName fqn) {
-        return fqn.shortName();
     }
 
     @NotNull
@@ -99,7 +95,7 @@ public final class QualifiedNamesUtil {
      */
     @NotNull
     public static String tail(@NotNull FqName headFQN, @NotNull FqName fullFQN) {
-        if (!isSubpackageOf(fullFQN, headFQN)) {
+        if (!isSubpackageOf(fullFQN, headFQN) || headFQN.isRoot()) {
             return fullFQN.getFqName();
         }
 

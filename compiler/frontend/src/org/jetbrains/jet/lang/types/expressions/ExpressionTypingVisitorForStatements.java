@@ -19,7 +19,6 @@ package org.jetbrains.jet.lang.types.expressions;
 import com.google.common.collect.Sets;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.tree.IElementType;
-import com.intellij.util.ObjectUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.lang.descriptors.*;
@@ -108,11 +107,12 @@ public class ExpressionTypingVisitorForStatements extends ExpressionTypingVisito
             context.trace.report(LOCAL_VARIABLE_WITH_SETTER.on(setter));
         }
 
-        VariableDescriptor propertyDescriptor = context.expressionTypingServices.getDescriptorResolver().resolveLocalVariableDescriptor(scope.getContainingDeclaration(), scope, property, context.dataFlowInfo, context.trace);
+        VariableDescriptor propertyDescriptor = context.expressionTypingServices.getDescriptorResolver().
+                resolveLocalVariableDescriptor(scope.getContainingDeclaration(), scope, property, context.dataFlowInfo, context.trace);
         JetExpression initializer = property.getInitializer();
-        if (property.getPropertyTypeRef() != null && initializer != null) {
+        if (property.getTypeRef() != null && initializer != null) {
             JetType outType = propertyDescriptor.getType();
-            JetType initializerType = facade.getTypeInfo(initializer, context.replaceExpectedType(outType).replaceScope(scope)).getType();
+            facade.getTypeInfo(initializer, context.replaceExpectedType(outType).replaceScope(scope)).getType();
         }
         
         {
@@ -124,15 +124,36 @@ public class ExpressionTypingVisitorForStatements extends ExpressionTypingVisito
         }
 
         scope.addVariableDescriptor(propertyDescriptor);
+        ModifiersChecker.create(context.trace).checkModifiersForLocalDeclaration(property);
         return DataFlowUtils.checkStatementType(property, context, context.dataFlowInfo);
     }
 
     @Override
+    public JetTypeInfo visitMultiDeclaration(JetMultiDeclaration multiDeclaration, final ExpressionTypingContext context) {
+        final JetExpression initializer = multiDeclaration.getInitializer();
+        if (initializer == null) {
+            context.trace.report(INITIALIZER_REQUIRED_FOR_MULTIDECLARATION.on(multiDeclaration));
+            return JetTypeInfo.create(null, context.dataFlowInfo);
+        }
+        final ExpressionReceiver expressionReceiver = ExpressionTypingUtils.getExpressionReceiver(facade, initializer,
+                                                                                                  context.replaceExpectedType(
+                                                                                                          TypeUtils.NO_EXPECTED_TYPE));
+        if (expressionReceiver == null) {
+            return JetTypeInfo.create(null, context.dataFlowInfo);
+        }
+        ExpressionTypingUtils.defineLocalVariablesFromMultiDeclaration(scope, multiDeclaration, expressionReceiver, initializer, context);
+        return DataFlowUtils.checkStatementType(multiDeclaration, context, context.dataFlowInfo);
+    }
+
+    @Override
     public JetTypeInfo visitNamedFunction(JetNamedFunction function, ExpressionTypingContext context) {
-        SimpleFunctionDescriptor functionDescriptor = context.expressionTypingServices.getDescriptorResolver().resolveFunctionDescriptor(scope.getContainingDeclaration(), scope, function, context.trace);
+        SimpleFunctionDescriptor functionDescriptor = context.expressionTypingServices.getDescriptorResolver().
+                resolveFunctionDescriptor(scope.getContainingDeclaration(), scope, function, context.trace);
+
         scope.addFunctionDescriptor(functionDescriptor);
         JetScope functionInnerScope = FunctionDescriptorUtil.getFunctionInnerScope(context.scope, functionDescriptor, context.trace);
         context.expressionTypingServices.checkFunctionReturnType(functionInnerScope, function, functionDescriptor, context.dataFlowInfo, null, context.trace);
+        ModifiersChecker.create(context.trace).checkModifiersForLocalDeclaration(function);
         return DataFlowUtils.checkStatementType(function, context, context.dataFlowInfo);
     }
 

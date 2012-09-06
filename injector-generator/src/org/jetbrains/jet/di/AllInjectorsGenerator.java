@@ -19,6 +19,8 @@ package org.jetbrains.jet.di;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.jet.codegen.*;
 import org.jetbrains.jet.codegen.intrinsics.IntrinsicMethods;
+import org.jetbrains.jet.codegen.state.GenerationState;
+import org.jetbrains.jet.codegen.state.JetTypeMapper;
 import org.jetbrains.jet.lang.BuiltinsScopeExtensionMode;
 import org.jetbrains.jet.lang.ModuleConfiguration;
 import org.jetbrains.jet.lang.descriptors.ModuleDescriptor;
@@ -44,6 +46,9 @@ import java.io.IOException;
 //       To do that, you can run either this class, or /build.xml/generateInjectors task
 public class AllInjectorsGenerator {
 
+    private AllInjectorsGenerator() {
+    }
+
     public static void main(String[] args) throws IOException {
         generateInjectorForTopDownAnalyzerBasic();
         generateInjectorForTopDownAnalyzerForJvm();
@@ -53,7 +58,6 @@ public class AllInjectorsGenerator {
         generateTestInjector();
         generateInjectorForJavaSemanticServices();
         generateInjectorForJvmCodegen();
-        generateInjectorForJetTypeMapper();
         generateInjectorForLazyResolve();
         generateInjectorForBodyResolve();
     }
@@ -63,6 +67,7 @@ public class AllInjectorsGenerator {
         generator.addParameter(Project.class);
         generator.addParameter(ResolveSession.class);
         generator.addParameter(BindingTrace.class);
+        generator.addParameter(ModuleConfiguration.class);
         generator.addPublicField(DescriptorResolver.class);
         generator.addPublicField(ExpressionTypingServices.class);
         generator.addPublicField(TypeResolver.class);
@@ -84,7 +89,7 @@ public class AllInjectorsGenerator {
     private static void generateInjectorForTopDownAnalyzerForJs() throws IOException {
         DependencyInjectorGenerator generator = new DependencyInjectorGenerator(false);
         generateInjectorForTopDownAnalyzerCommon(generator);
-        generator.addParameter(ModuleConfiguration.class);
+        generator.addPublicParameter(ModuleConfiguration.class);
         generator.addField(DependencyClassByQualifiedNameResolverDummyImpl.class);
         generator.addField(NamespaceFactoryImpl.class);
         generator.generate("js/js.translator/src", "org.jetbrains.jet.di", "InjectorForTopDownAnalyzerForJs");
@@ -144,6 +149,7 @@ public class AllInjectorsGenerator {
 
         // Parameters
         generator.addPublicParameter(Project.class);
+        generator.addParameter(ModuleConfiguration.class);
 
         generator.generate("compiler/frontend/src", "org.jetbrains.jet.di", "InjectorForMacros");
     }
@@ -157,21 +163,22 @@ public class AllInjectorsGenerator {
         generator.addPublicField(TypeResolver.class);
         generator.addPublicField(CallResolver.class);
         generator.addField(true, JetStandardLibrary.class, null, new GivenExpression("JetStandardLibrary.getInstance()"));
+        generator.addField(false, ModuleConfiguration.class, null, new GivenExpression("ModuleConfiguration.EMPTY"));
 
         // Parameters
         generator.addPublicParameter(Project.class);
 
         generator.generate("compiler/tests", "org.jetbrains.jet.di", "InjectorForTests");
     }
-    
+
     private static void generateInjectorForJavaSemanticServices() throws IOException {
         DependencyInjectorGenerator generator = new DependencyInjectorGenerator(false);
-        
+
         // Fields
         generator.addPublicField(JavaSemanticServices.class);
         generator.addPublicField(JavaDescriptorResolver.class);
         generator.addField(true, BindingTrace.class, null,
-                new GivenExpression("new org.jetbrains.jet.lang.resolve.BindingTraceContext()"));
+                           new GivenExpression("new org.jetbrains.jet.lang.resolve.BindingTraceContext()"));
         generator.addField(JavaBridgeConfiguration.class);
         generator.addPublicField(PsiClassFinderImpl.class);
         generator.addField(false, ModuleDescriptor.class, null,
@@ -181,37 +188,35 @@ public class AllInjectorsGenerator {
 
         // Parameters
         generator.addPublicParameter(Project.class);
-        
+
         generator.generate("compiler/frontend.java/src", "org.jetbrains.jet.di", "InjectorForJavaSemanticServices");
     }
 
     private static void generateInjectorForJvmCodegen() throws IOException {
         DependencyInjectorGenerator generator = new DependencyInjectorGenerator(false);
-        generator.addParameter(BindingContext.class);
-        generator.addParameter(DiType.listOf(JetFile.class));
-        generator.addParameter(Project.class);
+
+        // Parameters
+        generator.addPublicParameter(JetTypeMapper.class);
+        generator.addPublicParameter(DiType.listOf(JetFile.class));
         generator.addParameter(BuiltinToJavaTypesMapping.class);
-        generator.addParameter(ClassBuilderMode.class);
         generator.addPublicParameter(GenerationState.class);
         generator.addParameter(ClassBuilderFactory.class);
-        generator.addPublicField(JetTypeMapper.class);
+        generator.addPublicParameter(Project.class);
+
+        // Fields
+        generator.addField(false, BindingTrace.class, "bindingTrace",
+                           new GivenExpression("jetTypeMapper.getBindingTrace()"));
+        generator.addField(false, BindingContext.class, "bindingContext",
+                           new GivenExpression("bindingTrace.getBindingContext()"));
+        generator.addField(false, ClassBuilderMode.class, "classBuilderMode",
+                           new GivenExpression("classBuilderFactory.getClassBuilderMode()"));
         generator.addPublicField(ClassCodegen.class);
         generator.addPublicField(ScriptCodegen.class);
         generator.addField(true, IntrinsicMethods.class, "intrinsics", null);
         generator.addPublicField(ClassFileFactory.class);
         generator.addPublicField(MemberCodegen.class);
-        generator.addPublicField(ClosureAnnotator.class);
-        generator.generate("compiler/backend/src", "org.jetbrains.jet.di", "InjectorForJvmCodegen");
-    }
 
-    private static void generateInjectorForJetTypeMapper() throws IOException {
-        DependencyInjectorGenerator generator = new DependencyInjectorGenerator(false);
-        generator.addParameter(BindingContext.class);
-        generator.addParameter(DiType.listOf(JetFile.class));
-        generator.addPublicField(JetTypeMapper.class);
-        generator.addField(BuiltinToJavaTypesMapping.ENABLED);
-        generator.addField(ClassBuilderMode.FULL);
-        generator.generate("compiler/backend/src", "org.jetbrains.jet.di", "InjectorForJetTypeMapper");
+        generator.generate("compiler/backend/src", "org.jetbrains.jet.di", "InjectorForJvmCodegen");
     }
 
     private static void generateInjectorForBodyResolve() throws IOException {
@@ -223,7 +228,8 @@ public class AllInjectorsGenerator {
         generator.addPublicParameter(Project.class);
         generator.addPublicParameter(TopDownAnalysisParameters.class);
         generator.addPublicParameter(BindingTrace.class);
+        generator.addPublicParameter(BodiesResolveContext.class);
+        generator.addParameter(ModuleConfiguration.class);
         generator.generate("compiler/frontend/src", "org.jetbrains.jet.di", "InjectorForBodyResolve");
     }
-
 }

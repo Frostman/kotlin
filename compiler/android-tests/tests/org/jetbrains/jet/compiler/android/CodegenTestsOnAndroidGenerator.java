@@ -32,7 +32,7 @@ import org.jetbrains.jet.codegen.GenerationUtils;
 import org.jetbrains.jet.compiler.PathManager;
 import org.jetbrains.jet.lang.psi.JetFile;
 import org.jetbrains.jet.lang.psi.JetPsiFactory;
-import org.jetbrains.jet.test.generator.Printer;
+import org.jetbrains.jet.utils.Printer;
 
 import java.io.File;
 import java.io.IOException;
@@ -54,7 +54,7 @@ public class CodegenTestsOnAndroidGenerator extends UsefulTestCase {
     private final String baseTestClassName = "AbstractCodegenTestCaseOnAndroid";
     private final String generatorName = "CodegenTestsOnAndroidGenerator";
 
-    private JetCoreEnvironment environmentWithMockJdk = JetTestUtils.createEnvironmentWithMockJdkAndIdeaAnnotations(myTestRootDisposable, ConfigurationKind.JDK_ONLY);
+    private JetCoreEnvironment environmentWithMockJdk = JetTestUtils.createEnvironmentWithMockJdkAndIdeaAnnotations(myTestRootDisposable, ConfigurationKind.JDK_AND_ANNOTATIONS);
     private JetCoreEnvironment environmentWithFullJdk = JetTestUtils.createEnvironmentWithFullJdk(myTestRootDisposable);
     private JetCoreEnvironment environmentWithFullJdkAndJUnit;
     

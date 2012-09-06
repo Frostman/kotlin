@@ -18,16 +18,17 @@ package org.jetbrains.jet.codegen.intrinsics;
 
 import com.intellij.psi.PsiElement;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.jet.codegen.ExpressionCodegen;
-import org.jetbrains.jet.codegen.GenerationState;
-import org.jetbrains.jet.codegen.JetTypeMapper;
-import org.jetbrains.jet.codegen.StackValue;
-import org.jetbrains.jet.lang.psi.JetExpression;
-import org.jetbrains.asm4.Opcodes;
 import org.jetbrains.asm4.Type;
 import org.jetbrains.asm4.commons.InstructionAdapter;
+import org.jetbrains.jet.codegen.CodegenUtil;
+import org.jetbrains.jet.codegen.ExpressionCodegen;
+import org.jetbrains.jet.codegen.StackValue;
+import org.jetbrains.jet.codegen.state.GenerationState;
+import org.jetbrains.jet.lang.psi.JetExpression;
 
 import java.util.List;
+
+import static org.jetbrains.asm4.Opcodes.*;
 
 /**
  * @author yole
@@ -40,10 +41,18 @@ public class BinaryOp implements IntrinsicMethod {
     }
 
     @Override
-    public StackValue generate(ExpressionCodegen codegen, InstructionAdapter v, @NotNull Type expectedType, PsiElement element, List<JetExpression> arguments, StackValue receiver, @NotNull GenerationState state) {
+    public StackValue generate(
+            ExpressionCodegen codegen,
+            InstructionAdapter v,
+            @NotNull Type expectedType,
+            PsiElement element,
+            List<JetExpression> arguments,
+            StackValue receiver,
+            @NotNull GenerationState state
+    ) {
         boolean nullable = expectedType.getSort() == Type.OBJECT;
         if (nullable) {
-            expectedType = JetTypeMapper.unboxType(expectedType);
+            expectedType = CodegenUtil.unboxType(expectedType);
         }
         if (arguments.size() == 1) {
             // Intrinsic is called as an ordinary function
@@ -59,12 +68,12 @@ public class BinaryOp implements IntrinsicMethod {
         v.visitInsn(expectedType.getOpcode(opcode));
 
         if (nullable) {
-            StackValue.onStack(expectedType).put(expectedType = JetTypeMapper.boxType(expectedType), v);
+            StackValue.onStack(expectedType).put(expectedType = CodegenUtil.boxType(expectedType), v);
         }
         return StackValue.onStack(expectedType);
     }
 
     private boolean shift() {
-        return opcode == Opcodes.ISHL || opcode == Opcodes.ISHR || opcode == Opcodes.IUSHR;
+        return opcode == ISHL || opcode == ISHR || opcode == IUSHR;
     }
 }

@@ -35,10 +35,8 @@ import org.jetbrains.jet.cli.common.messages.MessageCollector;
 import org.jetbrains.jet.cli.common.messages.MessageCollectorToString;
 import org.jetbrains.jet.cli.jvm.JVMConfigurationKeys;
 import org.jetbrains.jet.cli.jvm.compiler.JetCoreEnvironment;
-import org.jetbrains.jet.codegen.BuiltinToJavaTypesMapping;
-import org.jetbrains.jet.codegen.ClassBuilderFactories;
-import org.jetbrains.jet.codegen.CompilationErrorHandler;
-import org.jetbrains.jet.codegen.GenerationState;
+import org.jetbrains.jet.codegen.*;
+import org.jetbrains.jet.codegen.state.GenerationState;
 import org.jetbrains.jet.config.CompilerConfiguration;
 import org.jetbrains.jet.di.InjectorForTopDownAnalyzerForJvm;
 import org.jetbrains.jet.lang.BuiltinsScopeExtensionMode;
@@ -236,10 +234,11 @@ public class ReplInterpreter {
             earierScripts.add(Pair.create(earlierLine.getScriptDescriptor(), earlierLine.getClassName()));
         }
 
-        GenerationState generationState = new GenerationState(jetCoreEnvironment.getProject(), ClassBuilderFactories.binaries(false), backendProgress,
-                AnalyzeExhaust.success(trace.getBindingContext()), Collections.singletonList(psiFile),
+        GenerationState generationState = new GenerationState(psiFile.getProject(), ClassBuilderFactories.binaries(false), backendProgress,
+                AnalyzeExhaust.success(trace.getBindingContext(), injector.getModuleConfiguration()), Collections.singletonList(psiFile),
                 BuiltinToJavaTypesMapping.ENABLED);
-        generationState.compileScript(psiFile.getScript(), scriptClassName, earierScripts, CompilationErrorHandler.THROW_EXCEPTION);
+        generationState.getScriptCodegen().compileScript(psiFile.getScript(), scriptClassName, earierScripts,
+                                                         CompilationErrorHandler.THROW_EXCEPTION);
 
         for (String file : generationState.getFactory().files()) {
             classLoader.addClass(JvmClassName.byInternalName(file.replaceFirst("\\.class$", "")), generationState.getFactory().asBytes(file));

@@ -18,17 +18,17 @@ package org.jetbrains.jet.codegen.intrinsics;
 
 import com.intellij.psi.PsiElement;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.asm4.Type;
+import org.jetbrains.asm4.commons.InstructionAdapter;
+import org.jetbrains.jet.codegen.AsmTypeConstants;
 import org.jetbrains.jet.codegen.ExpressionCodegen;
-import org.jetbrains.jet.codegen.GenerationState;
-import org.jetbrains.jet.codegen.JetTypeMapper;
 import org.jetbrains.jet.codegen.StackValue;
+import org.jetbrains.jet.codegen.state.GenerationState;
 import org.jetbrains.jet.lang.psi.JetCallExpression;
 import org.jetbrains.jet.lang.psi.JetExpression;
 import org.jetbrains.jet.lang.resolve.BindingContext;
 import org.jetbrains.jet.lang.types.JetType;
 import org.jetbrains.jet.lexer.JetTokens;
-import org.jetbrains.asm4.Type;
-import org.jetbrains.asm4.commons.InstructionAdapter;
 
 import java.util.List;
 
@@ -37,31 +37,45 @@ import java.util.List;
  */
 public class Equals implements IntrinsicMethod {
     @Override
-    public StackValue generate(ExpressionCodegen codegen, InstructionAdapter v, @NotNull Type expectedType, PsiElement element, List<JetExpression> arguments, StackValue receiver, @NotNull GenerationState state) {
+    public StackValue generate(
+            ExpressionCodegen codegen,
+            InstructionAdapter v,
+            @NotNull Type expectedType,
+            PsiElement element,
+            List<JetExpression> arguments,
+            StackValue receiver,
+            @NotNull GenerationState state
+    ) {
 
         boolean leftNullable = true;
         JetExpression rightExpr;
         if (element instanceof JetCallExpression) {
-            receiver.put(JetTypeMapper.TYPE_OBJECT, v);
+            receiver.put(AsmTypeConstants.OBJECT_TYPE, v);
             JetCallExpression jetCallExpression = (JetCallExpression) element;
             JetExpression calleeExpression = jetCallExpression.getCalleeExpression();
             if (calleeExpression != null) {
                 JetType leftType = codegen.getBindingContext().get(BindingContext.EXPRESSION_TYPE, calleeExpression);
-                if (leftType != null)
+                if (leftType != null) {
                     leftNullable = leftType.isNullable();
+                }
             }
             rightExpr = arguments.get(0);
         }
         else {
             JetExpression leftExpr = arguments.get(0);
-            leftNullable = codegen.getBindingContext().get(BindingContext.EXPRESSION_TYPE, leftExpr).isNullable();
-            codegen.gen(leftExpr).put(JetTypeMapper.TYPE_OBJECT, v);
+            JetType leftType = codegen.getBindingContext().get(BindingContext.EXPRESSION_TYPE, leftExpr);
+            assert leftType != null;
+            leftNullable = leftType.isNullable();
+            codegen.gen(leftExpr).put(AsmTypeConstants.OBJECT_TYPE, v);
             rightExpr = arguments.get(1);
         }
 
         JetType rightType = codegen.getBindingContext().get(BindingContext.EXPRESSION_TYPE, rightExpr);
-        codegen.gen(rightExpr).put(JetTypeMapper.TYPE_OBJECT, v);
+        codegen.gen(rightExpr).put(AsmTypeConstants.OBJECT_TYPE, v);
 
-        return codegen.generateEqualsForExpressionsOnStack(JetTokens.EQEQ, JetTypeMapper.TYPE_OBJECT, JetTypeMapper.TYPE_OBJECT, leftNullable, rightType.isNullable());
+        assert rightType != null;
+        return codegen
+                .generateEqualsForExpressionsOnStack(JetTokens.EQEQ, AsmTypeConstants.OBJECT_TYPE, AsmTypeConstants.OBJECT_TYPE, leftNullable,
+                                                     rightType.isNullable());
     }
 }

@@ -23,11 +23,24 @@ public final class ByteRange implements Range<Byte>, ByteIterable {
     private final byte start;
     private final int count;
 
-    public static final ByteRange empty = new ByteRange((byte) 0,0);
+    public static final ByteRange EMPTY = new ByteRange((byte) 0,0);
 
     public ByteRange(byte startValue, int count) {
         this.start = startValue;
         this.count = count;
+    }
+
+    @Override
+    public String toString() {
+        if (count == 0) {
+            return "<empty range>";
+        }
+        else if (count > 0) {
+            return getStart() + ".rangeTo(" + getEnd() + ")";
+        }
+        else {
+            return getStart() + ".downTo(" + getEnd() + ")";
+        }
     }
 
     @Override
@@ -88,32 +101,28 @@ public final class ByteRange implements Range<Byte>, ByteIterable {
 
     public ByteIterator step(int step) {
         if (step < 0)
-            return new MyIterator(getEnd(), -count, -step);
+            return new ByteIteratorImpl(getEnd(), -count, -step);
         else
-            return new MyIterator(start, count, step);
-    }
-
-    public ByteRange minus() {
-        return new ByteRange(getEnd(), -count);
+            return new ByteIteratorImpl(start, count, step);
     }
 
     @Override
     public ByteIterator iterator() {
-        return new MyIterator(start, count, 1);
+        return new ByteIteratorImpl(start, count, 1);
     }
 
     public static ByteRange count(int length) {
         return new ByteRange((byte) 0, length);
     }
 
-    private static class MyIterator extends ByteIterator {
+    private static class ByteIteratorImpl extends ByteIterator {
+        private final int step;
         private byte cur;
-        private int step;
         private int count;
 
         private final boolean reversed;
 
-        public MyIterator(byte startValue, int count, int step) {
+        public ByteIteratorImpl(byte startValue, int count, int step) {
             cur = startValue;
             this.step = step;
             if (count < 0) {
@@ -128,7 +137,7 @@ public final class ByteRange implements Range<Byte>, ByteIterable {
         }
 
         @Override
-        public boolean getHasNext() {
+        public boolean hasNext() {
             return count > 0;
         }
 

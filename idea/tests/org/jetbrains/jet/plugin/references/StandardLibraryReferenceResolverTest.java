@@ -67,6 +67,14 @@ public class StandardLibraryReferenceResolverTest extends ResolveTestCase {
         doTest();
     }
 
+    public void testEmptyRange() throws Exception {
+        doTest();
+    }
+
+    public void testIntArrayConstructor() throws Exception {
+        doTest();
+    }
+
     public void testAllReferencesResolved() {
         StandardLibraryReferenceResolver referenceResolver = getProject().getComponent(StandardLibraryReferenceResolver.class);
         for (DeclarationDescriptor descriptor : getAllStandardDescriptors(JetStandardClasses.STANDARD_CLASSES_NAMESPACE)) {

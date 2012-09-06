@@ -20,12 +20,17 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.Lists;
 import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.util.SystemInfo;
+import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.psi.PsiFile;
 import com.intellij.testFramework.UsefulTestCase;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.jet.CompileCompilerDependenciesTest;
 import org.jetbrains.jet.ConfigurationKind;
+import org.jetbrains.jet.TestJdkKind;
 import org.jetbrains.jet.cli.jvm.JVMConfigurationKeys;
+import org.jetbrains.jet.codegen.state.GenerationState;
+import org.jetbrains.jet.codegen.state.GenerationStrategy;
 import org.jetbrains.jet.lang.BuiltinsScopeExtensionMode;
 import org.jetbrains.jet.lang.resolve.ScriptNameUtil;
 import org.jetbrains.jet.utils.ExceptionUtils;
@@ -47,6 +52,8 @@ import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -121,6 +128,17 @@ public abstract class CodegenTestCase extends UsefulTestCase {
         }
     }
 
+    protected String loadFileByFullPath(final String fullPath) {
+        try {
+            File file = new File(fullPath);
+            final String content = FileUtil.loadFile(file, true);
+            myFiles = CodegenTestFiles.create(file.getName(), content, myEnvironment.getProject());
+            return content;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     protected void loadFiles(final String... names) {
         myFiles = CodegenTestFiles.create(myEnvironment.getProject(), names);
     }
@@ -135,6 +153,11 @@ public abstract class CodegenTestCase extends UsefulTestCase {
 
     protected void blackBoxFile(String filename) {
         loadFile(filename);
+        blackBox();
+    }
+
+    protected void blackBoxFileByFullPath(String filename) {
+        loadFileByFullPath(filename);
         blackBox();
     }
 
@@ -194,7 +217,7 @@ public abstract class CodegenTestCase extends UsefulTestCase {
                 String scriptClassName = ScriptNameUtil.classNameForScript(myFiles.getPsiFile());
                 Class<?> scriptClass = loader.loadClass(scriptClassName);
 
-                Constructor constructor = getConstructor(scriptClass, state.getScriptConstructorMethod());
+                Constructor constructor = getConstructor(scriptClass, state.getScriptCodegen().getScriptConstructorMethod());
                 scriptInstance = constructor.newInstance(myFiles.getScriptParameterValues().toArray());
 
                 assertFalse("expecting at least one expectation", myFiles.getExpectedValues().isEmpty());
@@ -243,6 +266,22 @@ public abstract class CodegenTestCase extends UsefulTestCase {
         }
     }
 
+    protected void blackBoxFileWithJava(@NotNull String ktFile) throws Exception {
+        File javaClassesTempDirectory = new File(FileUtil.getTempDirectory(), "java-classes");
+        JetTestUtils.mkdirs(javaClassesTempDirectory);
+        List<String> options = Arrays.asList(
+                "-d", javaClassesTempDirectory.getPath()
+        );
+
+        File javaFile = new File("compiler/testData/codegen/" + ktFile.replaceFirst("\\.kt$", ".java"));
+        JetTestUtils.compileJavaFiles(Collections.singleton(javaFile), options);
+
+        myEnvironment = new JetCoreEnvironment(getTestRootDisposable(), CompileCompilerDependenciesTest.compilerConfigurationForTests(
+                ConfigurationKind.JDK_ONLY, TestJdkKind.MOCK_JDK, JetTestUtils.getAnnotationsJar(), javaClassesTempDirectory));
+
+        blackBoxFile(ktFile);
+    }
+
     protected GeneratedClassLoader createClassLoader(ClassFileFactory codegens) {
         List<URL> urls = Lists.newArrayList();
         for (File file : myEnvironment.getConfiguration().getList(JVMConfigurationKeys.CLASSPATH_KEY)) {
@@ -259,7 +298,7 @@ public abstract class CodegenTestCase extends UsefulTestCase {
     protected String generateToText() {
         if(alreadyGenerated == null)
             alreadyGenerated = generateCommon(ClassBuilderFactories.TEST);
-        return alreadyGenerated.createText();
+        return alreadyGenerated.getFactory().createText();
     }
 
     private GenerationState generateCommon(ClassBuilderFactory classBuilderFactory) {
@@ -274,10 +313,9 @@ public abstract class CodegenTestCase extends UsefulTestCase {
                 BuiltinsScopeExtensionMode.ALL);
         analyzeExhaust.throwIfError();
         AnalyzingUtils.throwExceptionOnErrors(analyzeExhaust.getBindingContext());
-        GenerationState state = new GenerationState(myEnvironment.getProject(), classBuilderFactory, analyzeExhaust, myFiles.getPsiFiles());
-        state.compileCorrectFiles(CompilationErrorHandler.THROW_EXCEPTION);
-        alreadyGenerated = state;
-        return state;
+        alreadyGenerated = new GenerationState(myEnvironment.getProject(), classBuilderFactory, analyzeExhaust, myFiles.getPsiFiles());
+        GenerationStrategy.STANDARD.compileCorrectFiles(alreadyGenerated, CompilationErrorHandler.THROW_EXCEPTION);
+        return alreadyGenerated;
     }
 
     protected Class generateNamespaceClass() {

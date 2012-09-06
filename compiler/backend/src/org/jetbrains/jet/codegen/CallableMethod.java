@@ -18,16 +18,16 @@ package org.jetbrains.jet.codegen;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.jet.codegen.signature.JvmMethodSignature;
-import org.jetbrains.jet.lang.descriptors.CallableDescriptor;
-import org.jetbrains.jet.lang.resolve.java.JvmAbi;
-import org.jetbrains.jet.lang.resolve.java.JvmClassName;
-import org.jetbrains.jet.lang.types.JetType;
-import org.jetbrains.asm4.Opcodes;
 import org.jetbrains.asm4.Type;
 import org.jetbrains.asm4.commons.InstructionAdapter;
+import org.jetbrains.jet.codegen.signature.JvmMethodSignature;
+import org.jetbrains.jet.lang.resolve.java.JvmAbi;
+import org.jetbrains.jet.lang.resolve.java.JvmClassName;
 
 import java.util.List;
+
+import static org.jetbrains.asm4.Opcodes.INVOKESPECIAL;
+import static org.jetbrains.asm4.Opcodes.INVOKESTATIC;
 
 /**
  * @author yole
@@ -49,9 +49,11 @@ public class CallableMethod implements Callable {
     @Nullable
     private final Type generateCalleeType;
 
-    public CallableMethod(@NotNull JvmClassName owner, @Nullable JvmClassName defaultImplOwner, @Nullable JvmClassName defaultImplParam,
+    public CallableMethod(
+            @NotNull JvmClassName owner, @Nullable JvmClassName defaultImplOwner, @Nullable JvmClassName defaultImplParam,
             JvmMethodSignature signature, int invokeOpcode,
-            @Nullable JvmClassName thisClass, @Nullable Type receiverParameterType, @Nullable Type generateCalleeType) {
+            @Nullable JvmClassName thisClass, @Nullable Type receiverParameterType, @Nullable Type generateCalleeType
+    ) {
         this.owner = owner;
         this.defaultImplOwner = defaultImplOwner;
         this.defaultImplParam = defaultImplParam;
@@ -67,7 +69,7 @@ public class CallableMethod implements Callable {
         return owner;
     }
 
-    @NotNull
+    @Nullable
     public JvmClassName getDefaultImplParam() {
         return defaultImplParam;
     }
@@ -84,18 +86,22 @@ public class CallableMethod implements Callable {
         return signature.getValueParameterTypes();
     }
 
+    @Nullable
     public JvmClassName getThisType() {
         return thisClass;
     }
 
+    @Nullable
     public Type getReceiverClass() {
         return receiverParameterType;
     }
 
     void invoke(InstructionAdapter v) {
-        v.visitMethodInsn(getInvokeOpcode(), owner.getInternalName(), getSignature().getAsmMethod().getName(), getSignature().getAsmMethod().getDescriptor());
+        v.visitMethodInsn(getInvokeOpcode(), owner.getInternalName(), getSignature().getAsmMethod().getName(),
+                          getSignature().getAsmMethod().getDescriptor());
     }
 
+    @Nullable
     public Type getGenerateCalleeType() {
         return generateCalleeType;
     }
@@ -107,23 +113,20 @@ public class CallableMethod implements Callable {
 
         v.iconst(mask);
         String desc = getSignature().getAsmMethod().getDescriptor().replace(")", "I)");
-        if("<init>".equals(getSignature().getAsmMethod().getName())) {
-            v.visitMethodInsn(Opcodes.INVOKESPECIAL, defaultImplOwner.getInternalName(), "<init>", desc);
+        if ("<init>".equals(getSignature().getAsmMethod().getName())) {
+            v.visitMethodInsn(INVOKESPECIAL, defaultImplOwner.getInternalName(), "<init>", desc);
         }
         else {
-            if (getInvokeOpcode() != Opcodes.INVOKESTATIC)
+            if (getInvokeOpcode() != INVOKESTATIC) {
                 desc = desc.replace("(", "(" + defaultImplParam.getDescriptor());
-            v.visitMethodInsn(Opcodes.INVOKESTATIC, defaultImplOwner.getInternalName(),
-                    getSignature().getAsmMethod().getName() + JvmAbi.DEFAULT_PARAMS_IMPL_SUFFIX, desc);
+            }
+            v.visitMethodInsn(INVOKESTATIC, defaultImplOwner.getInternalName(),
+                              getSignature().getAsmMethod().getName() + JvmAbi.DEFAULT_PARAMS_IMPL_SUFFIX, desc);
         }
     }
 
     public boolean isNeedsThis() {
         return thisClass != null && generateCalleeType == null;
-    }
-
-    public boolean isNeedsReceiver() {
-        return receiverParameterType != null;
     }
 
     public Type getReturnType() {

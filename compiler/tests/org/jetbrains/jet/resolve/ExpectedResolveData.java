@@ -195,19 +195,26 @@ public abstract class ExpectedResolveData {
             PsiElement element = position.getElement();
 
             JetReferenceExpression referenceExpression = PsiTreeUtil.getParentOfType(element, JetReferenceExpression.class);
+            DeclarationDescriptor referenceTarget = bindingContext.get(REFERENCE_TARGET, referenceExpression);
             if ("!".equals(name)) {
                 assertTrue(
                         "Must have been unresolved: " +
                         renderReferenceInContext(referenceExpression) +
-                        " but was resolved to " + renderNullableDescriptor(bindingContext.get(REFERENCE_TARGET, referenceExpression)),
+                        " but was resolved to " + renderNullableDescriptor(referenceTarget),
                         unresolvedReferences.contains(referenceExpression));
+
+                assertTrue(
+                        String.format("Reference =%s= has a reference target =%s= but expected to be unresolved",
+                                      renderReferenceInContext(referenceExpression), renderNullableDescriptor(referenceTarget)),
+                        referenceTarget == null);
+
                 continue;
             }
             if ("!!".equals(name)) {
                 assertTrue(
                         "Must have been resolved to multiple descriptors: " +
                         renderReferenceInContext(referenceExpression) +
-                        " but was resolved to " + renderNullableDescriptor(bindingContext.get(REFERENCE_TARGET, referenceExpression)),
+                        " but was resolved to " + renderNullableDescriptor(referenceTarget),
                         bindingContext.get(AMBIGUOUS_REFERENCE_TARGET, referenceExpression) != null);
                 continue;
             }
@@ -215,8 +222,8 @@ public abstract class ExpectedResolveData {
                 assertTrue(
                        "Must have been resolved to null: " +
                         renderReferenceInContext(referenceExpression) +
-                        " but was resolved to " + renderNullableDescriptor(bindingContext.get(REFERENCE_TARGET, referenceExpression)),
-                        bindingContext.get(REFERENCE_TARGET, referenceExpression) == null
+                        " but was resolved to " + renderNullableDescriptor(referenceTarget),
+                        referenceTarget == null
                 );
                 continue;
             }
@@ -224,8 +231,8 @@ public abstract class ExpectedResolveData {
                 assertTrue(
                        "Must have been resolved to error: " +
                         renderReferenceInContext(referenceExpression) +
-                        " but was resolved to " + renderNullableDescriptor(bindingContext.get(REFERENCE_TARGET, referenceExpression)),
-                       ErrorUtils.isError(bindingContext.get(REFERENCE_TARGET, referenceExpression))
+                        " but was resolved to " + renderNullableDescriptor(referenceTarget),
+                       ErrorUtils.isError(referenceTarget)
                 );
                 continue;
             }

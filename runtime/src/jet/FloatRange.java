@@ -23,9 +23,24 @@ public final class FloatRange implements Range<Float> {
     private final float start;
     private final float size;
 
+    public static final FloatRange EMPTY = new FloatRange(0, 0);
+
     public FloatRange(float startValue, float size) {
         this.start = startValue;
         this.size = size;
+    }
+
+    @Override
+    public String toString() {
+        if (size == 0.0) {
+            return "<empty range>";
+        }
+        else if (size > 0) {
+            return getStart() + ".rangeTo(" + getEnd() + ")";
+        }
+        else {
+            return getStart() + ".downTo(" + getEnd() + ")";
+        }
     }
 
     @Override
@@ -60,9 +75,9 @@ public final class FloatRange implements Range<Float> {
 
     public FloatIterator step(float step) {
         if (step < 0)
-            return new MyIterator(getEnd(), -size, -step);
+            return new FloatIteratorImpl(getEnd(), -size, -step);
         else
-            return new MyIterator(start, size, step);
+            return new FloatIteratorImpl(start, size, step);
     }
 
     public boolean getIsReversed() {
@@ -81,22 +96,18 @@ public final class FloatRange implements Range<Float> {
         return size < 0 ? -size : size;
     }
 
-    public FloatRange minus() {
-        return new FloatRange(getEnd(), -size);
-    }
-
     public static FloatRange count(int length) {
         return new FloatRange(0, length);
     }
 
-    private static class MyIterator extends FloatIterator {
-        private float cur;
-        private float step;
+    private static class FloatIteratorImpl extends FloatIterator {
+        private final float step;
         private final float end;
+        private float cur;
 
         private final boolean reversed;
 
-        public MyIterator(float startValue, float size, float step) {
+        public FloatIteratorImpl(float startValue, float size, float step) {
             cur = startValue;
             this.step = step;
             if (size < 0) {
@@ -111,7 +122,7 @@ public final class FloatRange implements Range<Float> {
         }
 
         @Override
-        public boolean getHasNext() {
+        public boolean hasNext() {
             if (reversed)
                 return cur >= end;
             else

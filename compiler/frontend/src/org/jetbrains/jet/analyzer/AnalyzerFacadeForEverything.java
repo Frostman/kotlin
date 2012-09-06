@@ -21,6 +21,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.jet.di.InjectorForBodyResolve;
+import org.jetbrains.jet.lang.ModuleConfiguration;
 import org.jetbrains.jet.lang.resolve.AnalyzerScriptParameter;
 import org.jetbrains.jet.lang.resolve.BindingTrace;
 import org.jetbrains.jet.lang.resolve.BodiesResolveContext;
@@ -40,7 +41,8 @@ public class AnalyzerFacadeForEverything {
     public static AnalyzeExhaust analyzeBodiesInFilesWithJavaIntegration(
             Project project, List<AnalyzerScriptParameter> scriptParameters, Predicate<PsiFile> filesToAnalyzeCompletely,
             @NotNull BindingTrace traceContext,
-            @NotNull BodiesResolveContext bodiesResolveContext) {
+            @NotNull BodiesResolveContext bodiesResolveContext,
+            @NotNull ModuleConfiguration configuration) {
 
         TopDownAnalysisParameters topDownAnalysisParameters = new TopDownAnalysisParameters(
                 filesToAnalyzeCompletely, false, false, scriptParameters);
@@ -49,11 +51,12 @@ public class AnalyzerFacadeForEverything {
 
         InjectorForBodyResolve injector = new InjectorForBodyResolve(
                 project, topDownAnalysisParameters,
-                new ObservableBindingTrace(traceContext));
+                new ObservableBindingTrace(traceContext),
+                bodiesResolveContext, configuration);
 
         try {
-            injector.getBodyResolver().resolveBodies(bodiesResolveContext);
-            return AnalyzeExhaust.success(traceContext.getBindingContext());
+            injector.getBodyResolver().resolveBodies();
+            return AnalyzeExhaust.success(traceContext.getBindingContext(), configuration);
         } finally {
             injector.destroy();
         }

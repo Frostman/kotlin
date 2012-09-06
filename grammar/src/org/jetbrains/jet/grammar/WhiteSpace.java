@@ -20,8 +20,8 @@ package org.jetbrains.jet.grammar;
  * @author abreslav
  */
 public class WhiteSpace extends Token {
-    public WhiteSpace(CharSequence text) {
-        super(text);
+    public WhiteSpace(CharSequence text, String fileName, int line) {
+        super(text, fileName, line);
     }
 
     @Override

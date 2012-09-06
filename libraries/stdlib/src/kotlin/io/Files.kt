@@ -3,7 +3,6 @@ package kotlin.io
 import java.io.*
 import java.nio.charset.*
 import java.util.NoSuchElementException
-import java.util.List
 import java.util.ArrayList
 import java.net.URL
 
@@ -14,7 +13,7 @@ import java.net.URL
 public fun File.recurse(block: (File) -> Unit): Unit {
     block(this)
     if (this.isDirectory()) {
-        for (child in this.listFiles()) {
+        for (child in this.listFiles()!!) {
             if (child != null) {
                 child.recurse(block)
             }

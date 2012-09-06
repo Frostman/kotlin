@@ -6,6 +6,8 @@
   <version>@snapshot@</version>
   <vendor url="http://www.jetbrains.com">JetBrains Inc.</vendor>
 
+  <idea-version since-build="ideaIC-122.29" until-build="ideaIC-122.9999" />
+
   <depends optional="true">JUnit</depends>
 
   <project-components>
@@ -73,9 +75,6 @@
 
       <projectService serviceInterface="org.jetbrains.jet.lang.parsing.JetScriptDefinitionProvider"
                       serviceImplementation="org.jetbrains.jet.lang.parsing.JetScriptDefinitionProvider"/>
-
-      <projectService serviceInterface="org.jetbrains.jet.lang.resolve.java.extAnnotations.ExternalAnnotationsProvider"
-                      serviceImplementation="org.jetbrains.jet.plugin.extAnnotations.IdeaExternalAnnotationsProvider"/>
 
       <errorHandler implementation="org.jetbrains.jet.plugin.reporter.KotlinReportSubmitter"/>
 
@@ -176,6 +175,7 @@
       <iconProvider implementation="org.jetbrains.jet.plugin.JetIconProvider"/>
       <itemPresentationProvider implementationClass="org.jetbrains.jet.plugin.presentation.JetFunctionPresenter" forClass="org.jetbrains.jet.lang.psi.JetNamedFunction"/>
       <itemPresentationProvider implementationClass="org.jetbrains.jet.plugin.presentation.JetClassPresenter" forClass="org.jetbrains.jet.lang.psi.JetClass"/>
+      <gotoTargetRendererProvider id="JetGotoTargetRenderProvider" implementation="org.jetbrains.jet.plugin.JetGotoTargetRenderProvider" order="first"/>
       <elementDescriptionProvider implementation="org.jetbrains.jet.plugin.findUsages.JetElementDescriptionProvider"/>
       <findUsagesHandlerFactory implementation="org.jetbrains.jet.plugin.findUsages.KotlinFindUsagesHandlerFactory"/>
       <debugger.positionManagerFactory implementation="org.jetbrains.jet.plugin.debugger.JetPositionManagerFactory"/>

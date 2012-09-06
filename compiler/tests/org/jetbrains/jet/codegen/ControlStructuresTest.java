@@ -64,6 +64,13 @@ public class ControlStructuresTest extends CodegenTestCase {
         factorialTest("controlStructures/break.jet");
     }
 
+    /*
+    public void testInRangeConditionsInWhen() throws Exception {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        blackBoxFile("controlStructures/inRangeConditionsInWhen.jet");
+    }
+    */
+
     private void factorialTest(final String name) throws IllegalAccessException, InvocationTargetException {
         createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
         loadFile(name);
@@ -101,7 +108,7 @@ public class ControlStructuresTest extends CodegenTestCase {
     }
 
     public void testFor() throws Exception {
-        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_AND_ANNOTATIONS);
         loadFile();
 //        System.out.println(generateToText());
         final Method main = generateFunction();
@@ -110,7 +117,7 @@ public class ControlStructuresTest extends CodegenTestCase {
     }
 
     public void testIfBlock() throws Exception {
-        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_AND_ANNOTATIONS);
         loadFile();
 //        System.out.println(generateToText());
         final Method main = generateFunction();
@@ -185,6 +192,21 @@ public class ControlStructuresTest extends CodegenTestCase {
     public void testForUserType() throws Exception {
         createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
         blackBoxFile("controlStructures/forUserType.jet");
+    }
+
+    public void testForLoopMemberExtensionNext() throws Exception {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        blackBoxFile("controlStructures/forLoopMemberExtensionNext.kt");
+    }
+
+    public void testForLoopMemberExtensionHasNext() throws Exception {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        blackBoxFile("controlStructures/forLoopMemberExtensionHasNext.kt");
+    }
+
+    public void testForLoopMemberExtensionAll() throws Exception {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        blackBoxFile("controlStructures/forLoopMemberExtensionAll.kt");
     }
 
     public void testForIntArray() throws Exception {
@@ -313,13 +335,23 @@ public class ControlStructuresTest extends CodegenTestCase {
     }
 
     public void testKt1076() throws Exception {
-        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.ALL);
         blackBoxFile("regressions/kt1076.kt");
     }
 
     public void testKt998() throws Exception {
         createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
         blackBoxFile("regressions/kt998.kt");
+    }
+
+    public void testContinueInFor() throws Exception {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_AND_ANNOTATIONS);
+        blackBoxFile("controlStructures/continueInFor.kt");
+    }
+
+    public void testContinueToLabelInFor() throws Exception {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_AND_ANNOTATIONS);
+        blackBoxFile("controlStructures/continueToLabelInFor.kt");
     }
 
     public void testKt628() throws Exception {
@@ -375,5 +407,35 @@ public class ControlStructuresTest extends CodegenTestCase {
     public void testKt2291() {
         createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
         blackBoxFile("regressions/kt2291.kt");
+    }
+
+    public void testKt2259() {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        blackBoxFile("regressions/kt2259.kt");
+    }
+
+    public void testKt2577() {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        blackBoxFile("regressions/kt2577.kt");
+    }
+
+    public void testTryCatchFinallyChain() {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        blackBoxFile("controlStructures/tryCatchFinallyChain.kt");
+    }
+
+    public void testKt2597() {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        blackBoxFile("regressions/kt2597.kt");
+    }
+
+    public void testKt2598() {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        blackBoxFile("regressions/kt2598.kt");
+    }
+
+    public void testLongRange() {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        blackBoxFile("controlStructures/longRange.jet");
     }
 }

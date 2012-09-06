@@ -17,11 +17,9 @@
 package org.jetbrains.jet.lang.descriptors;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.lang.descriptors.annotations.AnnotationDescriptor;
-import org.jetbrains.jet.lang.resolve.BindingTrace;
 import org.jetbrains.jet.lang.resolve.name.Name;
 import org.jetbrains.jet.lang.resolve.scopes.InnerClassesScopeWrapper;
 import org.jetbrains.jet.lang.resolve.scopes.JetScope;
@@ -31,7 +29,10 @@ import org.jetbrains.jet.lang.resolve.scopes.receivers.ReceiverDescriptor;
 import org.jetbrains.jet.lang.types.*;
 import org.jetbrains.jet.resolve.DescriptorRenderer;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * @author Stepan Koltsov
@@ -106,7 +107,7 @@ public abstract class MutableClassDescriptorLite extends ClassDescriptorBase
         }
         else if (declarationDescriptor instanceof ClassDescriptor) {
             ClassDescriptor classDescriptor = (ClassDescriptor) declarationDescriptor;
-            return classDescriptor.getKind() == ClassKind.OBJECT || classDescriptor.getKind() == ClassKind.ENUM_CLASS;
+            return classDescriptor.getKind().isObject() || classDescriptor.getKind() == ClassKind.ENUM_CLASS;
         }
         else {
             return false;
@@ -295,7 +296,7 @@ public abstract class MutableClassDescriptorLite extends ClassDescriptorBase
 
                 @Override
                 public ClassObjectStatus setClassObjectDescriptor(@NotNull MutableClassDescriptorLite classObjectDescriptor) {
-                    if (getKind() == ClassKind.OBJECT) {
+                    if (getKind().isObject()) {
                         return ClassObjectStatus.NOT_ALLOWED;
                     }
 
@@ -307,7 +308,7 @@ public abstract class MutableClassDescriptorLite extends ClassDescriptorBase
                         return ClassObjectStatus.NOT_ALLOWED;
                     }
 
-                    assert classObjectDescriptor.getKind() == ClassKind.OBJECT;
+                    assert classObjectDescriptor.getKind() == ClassKind.CLASS_OBJECT;
                     MutableClassDescriptorLite.this.classObjectDescriptor = classObjectDescriptor;
 
                     return ClassObjectStatus.OK;

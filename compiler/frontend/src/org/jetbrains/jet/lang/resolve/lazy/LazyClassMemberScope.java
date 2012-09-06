@@ -39,6 +39,11 @@ import java.util.*;
 */
 public class LazyClassMemberScope extends AbstractLazyMemberScope<LazyClassDescriptor, ClassMemberDeclarationProvider> {
 
+    @NotNull
+    private static final Set<ClassKind> GENERATE_CONSTRUCTORS_FOR =
+            EnumSet.of(ClassKind.CLASS, ClassKind.ANNOTATION_CLASS, ClassKind.OBJECT,
+                       ClassKind.ENUM_CLASS, ClassKind.ENUM_ENTRY, ClassKind.CLASS_OBJECT);
+
     private interface MemberExtractor<T extends CallableMemberDescriptor> {
         MemberExtractor<FunctionDescriptor> EXTRACT_FUNCTIONS = new MemberExtractor<FunctionDescriptor>() {
             @NotNull
@@ -138,7 +143,34 @@ public class LazyClassMemberScope extends AbstractLazyMemberScope<LazyClassDescr
             fromSupertypes.addAll(supertype.getMemberScope().getFunctions(name));
         }
         generateDelegatingDescriptors(name, MemberExtractor.EXTRACT_FUNCTIONS, result);
+        generateEnumClassObjectMethods(result, name);
         generateFakeOverrides(name, fromSupertypes, result, FunctionDescriptor.class);
+    }
+
+    private void generateEnumClassObjectMethods(@NotNull Collection<? super FunctionDescriptor> result, @NotNull Name name) {
+        if (!isEnumClassObject()) return;
+
+        ClassDescriptor classDescriptor = (ClassDescriptor) thisDescriptor.getContainingDeclaration();
+
+        if (name.equals(DescriptorResolver.VALUES_METHOD_NAME)) {
+            SimpleFunctionDescriptor valuesMethod = DescriptorResolver
+                    .createEnumClassObjectValuesMethod(thisDescriptor, resolveSession.getTrace());
+            result.add(valuesMethod);
+        }
+        else if (name.equals(DescriptorResolver.VALUE_OF_METHOD_NAME)) {
+            SimpleFunctionDescriptor valueOfMethod = DescriptorResolver
+                    .createEnumClassObjectValueOfMethod(thisDescriptor, resolveSession.getTrace());
+            result.add(valueOfMethod);
+        }
+    }
+
+    private boolean isEnumClassObject() {
+        DeclarationDescriptor containingDeclaration = thisDescriptor.getContainingDeclaration();
+        if (!(containingDeclaration instanceof ClassDescriptor)) return false;
+        ClassDescriptor classDescriptor = (ClassDescriptor) containingDeclaration;
+        if (classDescriptor.getKind() != ClassKind.ENUM_CLASS) return false;
+        if (classDescriptor.getClassObjectDescriptor() != thisDescriptor) return false;
+        return true;
     }
 
     @NotNull
@@ -180,22 +212,6 @@ public class LazyClassMemberScope extends AbstractLazyMemberScope<LazyClassDescr
                     result.add(propertyDescriptor);
                 }
             }
-        }
-
-        // Enum entries
-        JetClassOrObject classOrObjectDeclaration = declarationProvider.getClassOrObjectDeclaration(name);
-        if (classOrObjectDeclaration instanceof JetEnumEntry) {
-            // TODO: This code seems to be wrong, but it mimics the present behavior of eager resolve
-            JetEnumEntry jetEnumEntry = (JetEnumEntry) classOrObjectDeclaration;
-            if (!jetEnumEntry.hasPrimaryConstructor()) {
-                VariableDescriptor propertyDescriptor = resolveSession.getInjector().getDescriptorResolver()
-                        .resolveObjectDeclarationAsPropertyDescriptor(thisDescriptor,
-                                                                      jetEnumEntry,
-                                                                      resolveSession.getClassDescriptor(jetEnumEntry),
-                                                                      resolveSession.getTrace());
-                result.add(propertyDescriptor);
-            }
-
         }
 
         // Members from supertypes
@@ -242,6 +258,9 @@ public class LazyClassMemberScope extends AbstractLazyMemberScope<LazyClassDescr
                 // Nothing else is inherited
             }
         }
+
+        getFunctions(DescriptorResolver.VALUES_METHOD_NAME);
+        getFunctions(DescriptorResolver.VALUE_OF_METHOD_NAME);
     }
 
     @Override
@@ -263,28 +282,29 @@ public class LazyClassMemberScope extends AbstractLazyMemberScope<LazyClassDescr
 
     @Nullable
     public ConstructorDescriptor getPrimaryConstructor() {
-        if (!primaryConstructorResolved) {
-            if (EnumSet.of(ClassKind.CLASS, ClassKind.ANNOTATION_CLASS, ClassKind.OBJECT, ClassKind.ENUM_CLASS).contains(thisDescriptor.getKind())) {
-                JetClassOrObject classOrObject = declarationProvider.getOwnerInfo().getCorrespondingClassOrObject();
-                if (thisDescriptor.getKind() != ClassKind.OBJECT) {
-                    JetClass jetClass = (JetClass) classOrObject;
-                    ConstructorDescriptorImpl constructor = resolveSession.getInjector().getDescriptorResolver()
-                            .resolvePrimaryConstructorDescriptor(thisDescriptor.getScopeForClassHeaderResolution(),
-                                                                 thisDescriptor,
-                                                                 jetClass,
-                                                                 resolveSession.getTrace());
-                    primaryConstructor = constructor;
-                    setDeferredReturnType(constructor);
-                }
-                else {
-                    ConstructorDescriptorImpl constructor =
-                            DescriptorResolver.createPrimaryConstructorForObject(classOrObject, thisDescriptor, resolveSession.getTrace());
-                    setDeferredReturnType(constructor);
-                    primaryConstructor = constructor;
-                }
-            }
-            primaryConstructorResolved = true;
+        if (primaryConstructorResolved) {
+            return primaryConstructor;
         }
+        if (GENERATE_CONSTRUCTORS_FOR.contains(thisDescriptor.getKind())) {
+            JetClassOrObject classOrObject = declarationProvider.getOwnerInfo().getCorrespondingClassOrObject();
+            if (!thisDescriptor.getKind().isObject()) {
+                JetClass jetClass = (JetClass) classOrObject;
+                ConstructorDescriptorImpl constructor = resolveSession.getInjector().getDescriptorResolver()
+                        .resolvePrimaryConstructorDescriptor(thisDescriptor.getScopeForClassHeaderResolution(),
+                                                             thisDescriptor,
+                                                             jetClass,
+                                                             resolveSession.getTrace());
+                primaryConstructor = constructor;
+                setDeferredReturnType(constructor);
+            }
+            else {
+                ConstructorDescriptorImpl constructor =
+                        DescriptorResolver.createAndRecordPrimaryConstructorForObject(classOrObject, thisDescriptor, resolveSession.getTrace());
+                setDeferredReturnType(constructor);
+                primaryConstructor = constructor;
+            }
+        }
+        primaryConstructorResolved = true;
         return primaryConstructor;
     }
 

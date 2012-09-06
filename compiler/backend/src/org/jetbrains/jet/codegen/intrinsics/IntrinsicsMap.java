@@ -70,7 +70,7 @@ class IntrinsicsMap {
         }
     }
 
-    private int valueParameterCountForKey(@NotNull CallableMemberDescriptor member) {
+    private static int valueParameterCountForKey(@NotNull CallableMemberDescriptor member) {
         if (member instanceof PropertyDescriptor) {
             return -1;
         }
@@ -79,14 +79,21 @@ class IntrinsicsMap {
         }
     }
 
-    private Map<Key, IntrinsicMethod> intrinsicsMap = Maps.newHashMap();
+    private final Map<Key, IntrinsicMethod> intrinsicsMap = Maps.newHashMap();
 
 
     /**
      * @param valueParameterCount -1 for property
      */
+    public void registerIntrinsic(@NotNull FqNameUnsafe owner, @NotNull Name name, int valueParameterCount, @NotNull IntrinsicMethod impl) {
+        intrinsicsMap.put(new Key(owner, name, valueParameterCount), impl);
+    }
+
+    /**
+     * @param valueParameterCount -1 for property
+     */
     public void registerIntrinsic(@NotNull FqName owner, @NotNull Name name, int valueParameterCount, @NotNull IntrinsicMethod impl) {
-        intrinsicsMap.put(new Key(owner.toUnsafe(), name, valueParameterCount), impl);
+        registerIntrinsic(owner.toUnsafe(), name, valueParameterCount, impl);
     }
 
 
@@ -98,5 +105,4 @@ class IntrinsicsMap {
                 valueParameterCountForKey(descriptor));
         return intrinsicsMap.get(key);
     }
-
 }

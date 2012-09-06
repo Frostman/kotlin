@@ -1,3 +1,0 @@
-namespace test
-
-internal final var  </*0*/ P : jet.Any?, /*1*/ Q : jet.Any?> java.util.Map<P, Q>.asas: jet.Int

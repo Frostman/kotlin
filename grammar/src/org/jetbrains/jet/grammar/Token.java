@@ -20,16 +20,27 @@ package org.jetbrains.jet.grammar;
  * @author abreslav
  */
 public class Token {
+    private final String fileName;
     private final CharSequence text;
+    private final int line;
 
-    public Token(CharSequence text) {
+    public Token(CharSequence text, String fileName, int line) {
         this.text = text;
+        this.fileName = fileName;
+        this.line = line;
     }
 
     public CharSequence getText() {
         return text;
     }
 
+    public String getFileName() {
+        return fileName;
+    }
+
+    public int getLine() {
+        return line;
+    }
 
     @Override
     public String toString() {

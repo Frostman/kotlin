@@ -21,13 +21,16 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.impl.CheckUtil;
 import com.intellij.psi.impl.source.codeStyle.CodeEditUtil;
+import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.util.PsiTreeUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.lang.resolve.ImportPath;
 import org.jetbrains.jet.lang.resolve.name.FqName;
 import org.jetbrains.jet.lang.resolve.name.Name;
+import org.jetbrains.jet.lang.types.expressions.OperatorConventions;
 import org.jetbrains.jet.lang.types.lang.JetStandardClasses;
+import org.jetbrains.jet.lexer.JetToken;
 import org.jetbrains.jet.lexer.JetTokens;
 
 import java.util.Collection;
@@ -133,7 +136,11 @@ public class JetPsiUtil {
     @Nullable
     public static FqName getFQName(JetNamedDeclaration namedDeclaration) {
         if (namedDeclaration instanceof JetObjectDeclarationName) {
-            JetObjectDeclaration objectDeclaration = PsiTreeUtil.getParentOfType(namedDeclaration, JetObjectDeclaration.class);
+            JetNamedDeclaration objectDeclaration = PsiTreeUtil.getParentOfType(namedDeclaration, JetObjectDeclaration.class);
+            if (objectDeclaration == null) {
+                objectDeclaration = PsiTreeUtil.getParentOfType(namedDeclaration, JetEnumEntry.class);
+            }
+            
             if (objectDeclaration == null) {
                 return null;
             }
@@ -156,8 +163,19 @@ public class JetPsiUtil {
         if (parent instanceof JetFile) {
             firstPart = getFQName((JetFile) parent);
         }
-        else if (parent instanceof JetNamedFunction || parent instanceof JetClass || parent instanceof JetObjectDeclaration) {
+        else if (parent instanceof JetNamedFunction || parent instanceof JetClass) {
             firstPart = getFQName((JetNamedDeclaration) parent);
+        } 
+        else if (parent instanceof JetObjectDeclaration) {
+            if (parent.getParent() instanceof JetClassObject) {
+                JetClassOrObject classOrObject = PsiTreeUtil.getParentOfType(parent, JetClassOrObject.class);
+                if (classOrObject != null) {
+                    firstPart = getFQName((JetNamedDeclaration) classOrObject);
+                }
+            }
+            else {
+                firstPart = getFQName((JetNamedDeclaration) parent);
+            }
         }
 
         if (firstPart == null) {
@@ -174,27 +192,12 @@ public class JetPsiUtil {
             return null;
         }
 
+        if (PsiTreeUtil.hasErrorElements(importedReference)) {
+            return null;
+        }
+
         final String text = importedReference.getText();
         return new ImportPath(text.replaceAll(" ", "") + (importDirective.isAllUnder() ? ".*" : ""));
-    }
-
-    public static boolean isIrrefutable(JetWhenEntry entry) {
-        if (entry.isElse()) return true;
-        for (JetWhenCondition condition : entry.getConditions()) {
-            if (condition instanceof JetWhenConditionIsPattern) {
-                JetPattern pattern = ((JetWhenConditionIsPattern) condition).getPattern();
-                if (pattern instanceof JetWildcardPattern) {
-                    return true;
-                }
-                if (pattern instanceof JetBindingPattern) {
-                    JetBindingPattern bindingPattern = (JetBindingPattern) pattern;
-                    if (bindingPattern.getVariableDeclaration().getPropertyTypeRef() == null && bindingPattern.getCondition() == null) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
     }
 
     @Nullable
@@ -320,5 +323,64 @@ public class JetPsiUtil {
             }
         }
         return true;
+    }
+
+    public static boolean isScriptDeclaration(@NotNull JetDeclaration namedDeclaration) {
+        return getScript(namedDeclaration) != null;
+    }
+
+    @Nullable
+    public static JetScript getScript(@NotNull JetDeclaration namedDeclaration) {
+        PsiElement parent = namedDeclaration.getParent();
+        if (parent != null && parent.getParent() instanceof JetScript) {
+            return (JetScript) parent.getParent();
+        }
+        else {
+            return null;
+        }
+    }
+
+    public static boolean isVariableNotParameterDeclaration(@NotNull JetDeclaration declaration) {
+        if (!(declaration instanceof JetVariableDeclaration)) return false;
+        if (declaration instanceof JetProperty) return true;
+        assert declaration instanceof JetMultiDeclarationEntry;
+        JetMultiDeclarationEntry multiDeclarationEntry = (JetMultiDeclarationEntry) declaration;
+        return !(multiDeclarationEntry.getParent().getParent() instanceof JetForExpression);
+    }
+
+    @Nullable
+    public static Name getConventionName(@NotNull JetSimpleNameExpression simpleNameExpression) {
+        if (simpleNameExpression.getIdentifier() != null) {
+            return simpleNameExpression.getReferencedNameAsName();
+        }
+
+        PsiElement firstChild = simpleNameExpression.getFirstChild();
+        if (firstChild != null) {
+            IElementType elementType = firstChild.getNode().getElementType();
+            if (elementType instanceof JetToken) {
+                JetToken jetToken = (JetToken) elementType;
+                return OperatorConventions.getNameForOperationSymbol(jetToken);
+            }
+        }
+
+        return null;
+    }
+
+    public static PsiElement getTopmostParentOfTypes(@Nullable PsiElement element, @NotNull Class<? extends PsiElement>... parentTypes) {
+        if (element == null) {
+            return null;
+        }
+
+        PsiElement result = null;
+        PsiElement parent = element.getParent();
+        while (parent != null) {
+            if (PsiTreeUtil.instanceOf(parent, parentTypes)) {
+                result = parent;
+            }
+
+            parent = parent.getParent();
+        }
+
+        return result;
     }
 }

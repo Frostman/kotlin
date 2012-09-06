@@ -32,19 +32,6 @@ import java.io.File;
  * @author Nikolay Krasko
  */
 public class OptimizeImportsTest extends LightCodeInsightTestCase {
-
-    @Override
-    protected void tearDown() throws Exception {
-        try {
-            super.tearDown();
-        } catch (RuntimeException exception) {
-            // TODO: Fix inability to free pointer for runtimejar in JetWithJdkAndRuntimeLightProjectDescriptor
-            if (!(exception.getMessage().contains("runtimejar") && exception.getMessage().contains("Virtual pointer hasn't been disposed"))) {
-                throw exception;
-            }
-        }
-    }
-
     public void testAlreadyOptimized() throws Exception {
         doTest();
     }
@@ -62,6 +49,26 @@ public class OptimizeImportsTest extends LightCodeInsightTestCase {
     }
 
     public void testWithAliases() throws Exception {
+        doTest();
+    }
+
+    public void testKt2488EnumEntry() throws Exception {
+        doTest();
+    }
+
+    public void testKt1850FullQualified() throws Exception {
+        doTest();
+    }
+    
+    public void testKt1850InnerClass() throws Exception {
+        doTest();
+    }
+
+    public void testPartiallyQualified() throws Exception {
+        doTest();
+    }
+
+    public void testKt2709() throws Exception {
         doTest();
     }
 

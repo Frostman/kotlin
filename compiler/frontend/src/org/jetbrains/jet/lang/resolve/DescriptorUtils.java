@@ -16,19 +16,25 @@
 
 package org.jetbrains.jet.lang.resolve;
 
+import com.google.common.base.Predicate;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.jet.lang.ModuleConfiguration;
 import org.jetbrains.jet.lang.descriptors.*;
+import org.jetbrains.jet.lang.descriptors.annotations.AnnotationDescriptor;
 import org.jetbrains.jet.lang.psi.JetElement;
 import org.jetbrains.jet.lang.psi.JetFunction;
+import org.jetbrains.jet.lang.resolve.constants.CompileTimeConstant;
 import org.jetbrains.jet.lang.resolve.name.FqName;
 import org.jetbrains.jet.lang.resolve.name.FqNameUnsafe;
 import org.jetbrains.jet.lang.resolve.name.Name;
 import org.jetbrains.jet.lang.resolve.scopes.receivers.ReceiverDescriptor;
 import org.jetbrains.jet.lang.types.*;
+import org.jetbrains.jet.lang.types.checker.JetTypeChecker;
 import org.jetbrains.jet.lang.types.lang.JetStandardClasses;
+import org.jetbrains.jet.lang.types.lang.JetStandardLibrary;
 
 import java.util.*;
 
@@ -229,19 +235,6 @@ public class DescriptorUtils {
         return expectedType != null ? expectedType : TypeUtils.NO_EXPECTED_TYPE;
     }
 
-    public static boolean isObject(@NotNull ClassifierDescriptor classifier) {
-        if (classifier instanceof ClassDescriptor) {
-            ClassDescriptor clazz = (ClassDescriptor) classifier;
-            return clazz.getKind() == ClassKind.OBJECT || clazz.getKind() == ClassKind.ENUM_ENTRY;
-        }
-        else if (classifier instanceof TypeParameterDescriptor) {
-            return false;
-        }
-        else {
-            throw new IllegalStateException("unknown classifier: " + classifier);
-        }
-    }
-
     public static boolean isSubclass(@NotNull ClassDescriptor subClass, @NotNull ClassDescriptor superClass) {
         return isSubtypeOfClass(subClass.getDefaultType(), superClass.getOriginal());
     }
@@ -290,18 +283,13 @@ public class DescriptorUtils {
     }
 
     public static boolean isClassObject(@NotNull DeclarationDescriptor descriptor) {
-        if (descriptor instanceof ClassDescriptor) {
-            ClassDescriptor classDescriptor = (ClassDescriptor) descriptor;
-            if (classDescriptor.getKind() == ClassKind.OBJECT) {
-                if (classDescriptor.getContainingDeclaration() instanceof ClassDescriptor) {
-                    ClassDescriptor containingDeclaration = (ClassDescriptor) classDescriptor.getContainingDeclaration();
-                    if (classDescriptor.getDefaultType().equals(containingDeclaration.getClassObjectType())) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
+        return descriptor instanceof ClassDescriptor
+               && ((ClassDescriptor) descriptor).getKind() == ClassKind.CLASS_OBJECT;
+    }
+
+    public static boolean isEnumEntry(@NotNull DeclarationDescriptor descriptor) {
+        return descriptor instanceof ClassDescriptor
+               && ((ClassDescriptor) descriptor).getKind() == ClassKind.ENUM_ENTRY;
     }
 
     @NotNull
@@ -338,11 +326,89 @@ public class DescriptorUtils {
         if (containingDeclaration instanceof ClassDescriptor) {
             ClassDescriptor classDescriptor = (ClassDescriptor) containingDeclaration;
 
-            if (classDescriptor.getKind() == ClassKind.OBJECT) {
+            if (classDescriptor.getKind().isObject()) {
                 return inStaticContext(classDescriptor.getContainingDeclaration());
             }
 
         }
         return false;
+    }
+
+    public static boolean isIteratorWithoutRemoveImpl(@NotNull ClassDescriptor classDescriptor) {
+        ClassDescriptor iteratorOfT = JetStandardLibrary.getInstance().getIterator();
+        JetType iteratorOfAny = TypeUtils.substituteParameters(iteratorOfT, Collections.singletonList(JetStandardClasses.getAnyType()));
+        boolean isIterator = JetTypeChecker.INSTANCE.isSubtypeOf(classDescriptor.getDefaultType(), iteratorOfAny);
+        boolean hasRemove = hasMethod(classDescriptor, Name.identifier("remove"));
+        return isIterator && !hasRemove;
+    }
+
+    private static boolean hasMethod(ClassDescriptor classDescriptor, Name name) {
+        Collection<FunctionDescriptor> removeFunctions = classDescriptor.getDefaultType().getMemberScope().getFunctions(name);
+        for (FunctionDescriptor function : removeFunctions) {
+            if (function.getValueParameters().isEmpty() && function.getTypeParameters().isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @NotNull
+    public static Name getClassObjectName(@NotNull Name className) {
+        return getClassObjectName(className.getName());
+    }
+
+    @NotNull
+    public static Name getClassObjectName(@NotNull String className) {
+        return Name.special("<class-object-for-" + className + ">");
+    }
+
+    public static boolean isEnumClassObject(@NotNull DeclarationDescriptor classObjectDescriptor) {
+        DeclarationDescriptor containingDeclaration = classObjectDescriptor.getContainingDeclaration();
+        return ((containingDeclaration instanceof ClassDescriptor) &&
+                ((ClassDescriptor) containingDeclaration).getKind() == ClassKind.ENUM_CLASS);
+    }
+
+    @NotNull
+    public static Visibility getDefaultConstructorVisibility(@NotNull ClassDescriptor classDescriptor) {
+        ClassKind classKind = classDescriptor.getKind();
+        if (classKind == ClassKind.ENUM_CLASS) {
+            return Visibilities.PRIVATE;
+        }
+        if (classKind.isObject()) {
+            return Visibilities.PRIVATE;
+        }
+        assert classKind == ClassKind.CLASS || classKind == ClassKind.TRAIT || classKind == ClassKind.ANNOTATION_CLASS;
+        return Visibilities.PUBLIC;
+    }
+    
+    public static List<String> getSortedValueArguments(AnnotationDescriptor descriptor) {
+        List<String> resultList = Lists.newArrayList();
+        for (Map.Entry<ValueParameterDescriptor, CompileTimeConstant<?>> entry : descriptor.getAllValueArguments().entrySet()) {
+            resultList.add(entry.getKey().getName().getName() + " = " + entry.getValue().toString());
+        }
+        Collections.sort(resultList);
+        return resultList;
+    }
+    
+    @Nullable
+    public static Predicate<DeclarationDescriptor> createIsNotHiddenByKotlinAnalogPredicate(
+            @NotNull DeclarationDescriptor descriptor,
+            final @Nullable ModuleConfiguration moduleConfiguration
+    ) {
+        if (moduleConfiguration == null || moduleConfiguration.getKotlinAnalogs(getFQName(descriptor)).isEmpty()) return null;
+        return new Predicate<DeclarationDescriptor>() {
+            @Override
+            public boolean apply(@Nullable DeclarationDescriptor descriptor) {
+                if (descriptor == null) return false;
+                Collection<ClassDescriptor> kotlinAnalogs =
+                        moduleConfiguration.getKotlinAnalogs(getFQName(descriptor));
+                for (ClassDescriptor kotlinAnalog : kotlinAnalogs) {
+                    if (kotlinAnalog.getName().equals(descriptor.getName())) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+        };
     }
 }

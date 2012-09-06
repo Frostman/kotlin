@@ -19,6 +19,7 @@ package org.jetbrains.jet.codegen;
 import com.google.common.collect.Lists;
 import gnu.trove.TObjectIntHashMap;
 import gnu.trove.TObjectIntIterator;
+import org.jetbrains.asm4.Type;
 import org.jetbrains.jet.lang.descriptors.DeclarationDescriptor;
 
 import java.util.ArrayList;
@@ -34,10 +35,12 @@ public class FrameMap {
     private final TObjectIntHashMap<DeclarationDescriptor> myVarSizes = new TObjectIntHashMap<DeclarationDescriptor>();
     private int myMaxIndex = 0;
 
-    public void enter(DeclarationDescriptor descriptor, int size) {
-        myVarIndex.put(descriptor, myMaxIndex);
-        myMaxIndex += size;
-        myVarSizes.put(descriptor, size);
+    public int enter(DeclarationDescriptor descriptor, Type type) {
+        int index = myMaxIndex;
+        myVarIndex.put(descriptor, index);
+        myMaxIndex += type.getSize();
+        myVarSizes.put(descriptor, type.getSize());
+        return index;
     }
 
     public int leave(DeclarationDescriptor descriptor) {
@@ -51,22 +54,14 @@ public class FrameMap {
         return oldIndex;
     }
 
-    public int enterTemp() {
-        return enterTemp(1);
-    }
-
-    public int enterTemp(int size) {
+    public int enterTemp(Type type) {
         int result = myMaxIndex;
-        myMaxIndex += size;
+        myMaxIndex += type.getSize();
         return result;
     }
 
-    public void leaveTemp() {
-        myMaxIndex--;
-    }
-
-    public void leaveTemp(int size) {
-        myMaxIndex -= size;
+    public void leaveTemp(Type type) {
+        myMaxIndex -= type.getSize();
     }
 
     public int getIndex(DeclarationDescriptor descriptor) {
@@ -132,12 +127,15 @@ public class FrameMap {
 
         Collections.sort(descriptors, new Comparator<Tuple3<DeclarationDescriptor, Integer, Integer>>() {
             @Override
-            public int compare(Tuple3<DeclarationDescriptor, Integer, Integer> left, Tuple3<DeclarationDescriptor, Integer, Integer> right) {
+            public int compare(
+                    Tuple3<DeclarationDescriptor, Integer, Integer> left,
+                    Tuple3<DeclarationDescriptor, Integer, Integer> right
+            ) {
                 return left._2 - right._2;
             }
         });
 
-        sb.append("size=" + myMaxIndex);
+        sb.append("size=").append(myMaxIndex);
 
         boolean first = true;
         for (Tuple3<DeclarationDescriptor, Integer, Integer> t : descriptors) {
@@ -145,7 +143,7 @@ public class FrameMap {
                 sb.append(", ");
             }
             first = false;
-            sb.append(t._1 + ",i=" + t._2 + ",s=" + t._3);
+            sb.append(t._1).append(",i=").append(t._2).append(",s=").append(t._3);
         }
 
         return sb.toString();

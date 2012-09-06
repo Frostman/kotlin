@@ -47,6 +47,14 @@ public class JetVisitor<R, D> extends PsiElementVisitor {
         return visitNamedDeclaration(property, data);
     }
 
+    public R visitMultiDeclaration(JetMultiDeclaration multiDeclaration, D data) {
+        return visitDeclaration(multiDeclaration, data);
+    }
+
+    public R visitMultiDeclarationEntry(JetMultiDeclarationEntry multiDeclarationEntry, D data) {
+        return visitNamedDeclaration(multiDeclarationEntry, data);
+    }
+
     public R visitTypedef(JetTypedef typedef, D data) {
         return visitNamedDeclaration(typedef, data);
     }
@@ -380,40 +388,12 @@ public class JetVisitor<R, D> extends PsiElementVisitor {
         return visitJetElement(condition, data);
     }
 
-    public R visitTypePattern(JetTypePattern pattern, D data) {
-        return visitPattern(pattern, data);
-    }
-
-    public R visitWildcardPattern(JetWildcardPattern pattern, D data) {
-        return visitPattern(pattern, data);
-    }
-
-    public R visitExpressionPattern(JetExpressionPattern pattern, D data) {
-        return visitPattern(pattern, data);
-    }
-
-    public R visitTuplePattern(JetTuplePattern pattern, D data) {
-        return visitPattern(pattern, data);
-    }
-
-    private R visitPattern(JetPattern pattern, D data) {
-        return visitJetElement(pattern, data);
-    }
-
-    public R visitDecomposerPattern(JetDecomposerPattern pattern, D data) {
-        return visitPattern(pattern, data);
-    }
-
     public R visitObjectDeclaration(JetObjectDeclaration declaration, D data) {
         return visitNamedDeclaration(declaration, data);
     }
     
     public R visitObjectDeclarationName(JetObjectDeclarationName declarationName, D data) {
         return visitNamedDeclaration(declarationName, data);
-    }
-
-    public R visitBindingPattern(JetBindingPattern pattern, D data) {
-        return visitPattern(pattern, data);
     }
 
     public R visitStringTemplateEntry(JetStringTemplateEntry entry, D data) {

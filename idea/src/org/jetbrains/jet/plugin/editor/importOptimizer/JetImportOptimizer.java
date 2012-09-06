@@ -139,6 +139,20 @@ public class JetImportOptimizer implements ImportOptimizer {
             }
 
             @Override
+            public void visitUserType(JetUserType type) {
+                if (type.getQualifier() == null) {
+                    super.visitUserType(type);
+                }
+                else {
+                    JetTypeArgumentList argumentList = type.getTypeArgumentList();
+                    if (argumentList != null) {
+                        super.visitTypeArgumentList(argumentList);
+                    }
+                    visitUserType(type.getQualifier());
+                }
+            }
+
+            @Override
             public void visitReferenceExpression(JetReferenceExpression expression) {
                 if (PsiTreeUtil.getParentOfType(expression, JetImportDirective.class) == null &&
                         PsiTreeUtil.getParentOfType(expression, JetNamespaceHeader.class) == null) {
@@ -179,6 +193,26 @@ public class JetImportOptimizer implements ImportOptimizer {
         if (element instanceof JetFile) {
             return JetPsiUtil.getFQName((JetFile) element);
         }
+        
+        if (element instanceof JetSimpleNameExpression) {
+            JetNamespaceHeader namespaceHeader = PsiTreeUtil.getParentOfType(element, JetNamespaceHeader.class);
+            if (namespaceHeader != null) {
+                List<JetSimpleNameExpression> simpleNameExpressions = PsiTreeUtil.getChildrenOfTypeAsList(namespaceHeader, JetSimpleNameExpression.class);
+                FqName fqName = null;
+                for (JetSimpleNameExpression nameExpression : simpleNameExpressions) {
+                    Name referencedName = nameExpression.getReferencedNameAsName();
+                    assert referencedName != null;
+                    if (fqName == null) {
+                        fqName = new FqName(referencedName.getName());
+                    } else {
+                        fqName = QualifiedNamesUtil.combine(fqName, referencedName);
+                    }
+                    if (nameExpression.equals(element)) {
+                        return fqName;
+                    }
+                }
+            }
+        }
 
         if (element instanceof JetNamedDeclaration) {
             return JetPsiUtil.getFQName((JetNamedDeclaration) element);
@@ -190,35 +224,62 @@ public class JetImportOptimizer implements ImportOptimizer {
                 return new FqName(qualifiedName);
             }
         }
+        
+        if (element instanceof PsiField) {
+            PsiField field = (PsiField) element;
+
+            FqName classFQN = getFqNameOfContainingClassForPsiMember(field);
+            if (classFQN == null) {
+                return null;
+            }
+
+            return combineClassFqNameWithMemberName(classFQN, field.getName());
+        }
 
         // TODO: Still problem with kotlin global properties imported from class files
         if (element instanceof PsiMethod) {
             PsiMethod method = (PsiMethod) element;
 
-            PsiClass containingClass = method.getContainingClass();
-
-            if (containingClass != null) {
-                String classFQNStr = containingClass.getQualifiedName();
-                if (classFQNStr != null) {
-                    if (method.isConstructor()) {
-                        return new FqName(classFQNStr);
-                    }
-
-                    FqName classFQN = new FqName(classFQNStr);
-                    if (classFQN.shortName().getName().equals(JvmAbi.PACKAGE_CLASS)) {
-                        return QualifiedNamesUtil.combine(classFQN.parent(), Name.identifier(method.getName()));
-                    }
-                    else {
-                        return QualifiedNamesUtil.combine(classFQN, Name.identifier(method.getName()));
-                    }
-                }
+            FqName classFQN = getFqNameOfContainingClassForPsiMember(method);
+            if (classFQN == null) {
+                return null;
             }
+            if (method.isConstructor()) {
+                return classFQN;
+            }
+
+            return combineClassFqNameWithMemberName(classFQN, method.getName());
         }
 
         if (element instanceof PsiPackage) {
             return new FqName(((PsiPackage) element).getQualifiedName());
         }
 
+        return null;
+    }
+
+    @Nullable
+    private static FqName combineClassFqNameWithMemberName(FqName classFQN, String memberName) {
+        if (memberName == null) {
+            return null;
+        }
+        if (classFQN.shortName().getName().equals(JvmAbi.PACKAGE_CLASS)) {
+            return QualifiedNamesUtil.combine(classFQN.parent(), Name.identifier(memberName));
+        }
+        else {
+            return QualifiedNamesUtil.combine(classFQN, Name.identifier(memberName));
+        }
+    }
+
+    @Nullable
+    private static FqName getFqNameOfContainingClassForPsiMember(PsiMember member) {
+        PsiClass containingClass = member.getContainingClass();
+        if (containingClass != null) {
+            String classFQNStr = containingClass.getQualifiedName();
+            if (classFQNStr != null) {
+                return new FqName(classFQNStr);
+            }
+        }
         return null;
     }
 

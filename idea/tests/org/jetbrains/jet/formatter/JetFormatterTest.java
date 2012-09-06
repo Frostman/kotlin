@@ -18,7 +18,6 @@ package org.jetbrains.jet.formatter;
 
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
-import org.jetbrains.jet.plugin.formatter.JetCodeStyleSettings;
 
 /**
  * Based on com.intellij.psi.formatter.java.JavaFormatterTest
@@ -30,6 +29,10 @@ public class JetFormatterTest extends AbstractJetFormatterTest {
     }
 
     public void testClass() throws Exception {
+        doTest();
+    }
+
+    public void testCommentInFunctionLiteral() throws Exception {
         doTest();
     }
 
@@ -65,6 +68,14 @@ public class JetFormatterTest extends AbstractJetFormatterTest {
         doTest();
     }
 
+    public void testMultilineFunctionLiteral() throws Exception {
+        doTest();
+    }
+
+    public void testMultilineFunctionLiteralWithParams() throws Exception {
+        doTestWithInvert();
+    }
+
     public void testParameters() throws Exception {
         doTestWithInvert();
     }
@@ -77,8 +88,20 @@ public class JetFormatterTest extends AbstractJetFormatterTest {
         doTestWithInvert();
     }
 
+    public void testSaveSpacesInDocComments() throws Exception {
+        doTest();
+    }
+
+    public void testSingleLineFunctionLiteral() throws Exception {
+        doTestWithInvert();
+    }
+
     public void testSpaceAroundExtendColon() throws Exception {
         doTestWithInvert();
+    }
+
+    public void testSpaceBeforeFunctionLiteral() throws Exception {
+        doTest();
     }
 
     public void testSpacesAroundOperations() throws Exception {
@@ -95,10 +118,6 @@ public class JetFormatterTest extends AbstractJetFormatterTest {
 
     public void testWhenEntryExpr() throws Exception {
         doTest();
-    }
-
-    public static JetCodeStyleSettings getJetSettings() {
-        return getSettings().getCustomSettings(JetCodeStyleSettings.class);
     }
 
     public static CodeStyleSettings getSettings() {

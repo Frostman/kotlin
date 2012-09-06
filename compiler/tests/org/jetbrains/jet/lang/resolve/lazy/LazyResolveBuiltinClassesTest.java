@@ -25,6 +25,9 @@ import com.intellij.util.Function;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.jet.ConfigurationKind;
 import org.jetbrains.jet.cli.jvm.compiler.JetCoreEnvironment;
+import org.jetbrains.jet.lang.descriptors.ClassDescriptor;
+import org.jetbrains.jet.lang.resolve.java.JavaBridgeConfiguration;
+import org.jetbrains.jet.lang.resolve.java.JavaToKotlinTypesMap;
 import org.jetbrains.jet.test.util.NamespaceComparator;
 import org.jetbrains.jet.lang.DefaultModuleConfiguration;
 import org.jetbrains.jet.lang.ModuleConfiguration;
@@ -45,6 +48,7 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -113,6 +117,12 @@ public class LazyResolveBuiltinClassesTest extends KotlinTestWithEnvironment {
                 @NotNull NamespaceDescriptor namespaceDescriptor,
                 @NotNull WritableScope namespaceMemberScope) {
             // DO nothing
+        }
+
+        @NotNull
+        @Override
+        public Collection<ClassDescriptor> getKotlinAnalogs(@NotNull FqNameUnsafe classOrPackageName) {
+            return JavaBridgeConfiguration.getKotlinAnalogsForJavaStandardClasses(classOrPackageName);
         }
     }
 }

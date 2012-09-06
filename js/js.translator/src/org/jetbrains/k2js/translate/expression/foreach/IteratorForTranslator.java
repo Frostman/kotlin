@@ -17,87 +17,68 @@
 package org.jetbrains.k2js.translate.expression.foreach;
 
 import com.google.dart.compiler.backend.js.ast.*;
-import com.google.dart.compiler.util.AstUtil;
+import com.intellij.openapi.util.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.jet.lang.descriptors.CallableDescriptor;
 import org.jetbrains.jet.lang.descriptors.FunctionDescriptor;
 import org.jetbrains.jet.lang.psi.JetExpression;
 import org.jetbrains.jet.lang.psi.JetForExpression;
-import org.jetbrains.k2js.translate.context.TemporaryVariable;
+import org.jetbrains.jet.lang.resolve.calls.ResolvedCall;
 import org.jetbrains.k2js.translate.context.TranslationContext;
 import org.jetbrains.k2js.translate.general.Translation;
 import org.jetbrains.k2js.translate.reference.CallBuilder;
 
 import static org.jetbrains.k2js.translate.utils.BindingUtils.*;
-import static org.jetbrains.k2js.translate.utils.JsAstUtils.convertToBlock;
-import static org.jetbrains.k2js.translate.utils.JsAstUtils.newVar;
-import static org.jetbrains.k2js.translate.utils.PsiUtils.getLoopBody;
 import static org.jetbrains.k2js.translate.utils.PsiUtils.getLoopRange;
 
 /**
  * @author Pavel Talanov
  */
 public final class IteratorForTranslator extends ForTranslator {
+    @NotNull
+    private final Pair<JsVars.JsVar, JsNameRef> iterator;
 
     @NotNull
     public static JsStatement doTranslate(@NotNull JetForExpression expression,
-                                          @NotNull TranslationContext context) {
+            @NotNull TranslationContext context) {
         return (new IteratorForTranslator(expression, context).translate());
     }
 
-    @NotNull
-    private final TemporaryVariable iterator;
-
     private IteratorForTranslator(@NotNull JetForExpression forExpression, @NotNull TranslationContext context) {
         super(forExpression, context);
-        iterator = context().declareTemporary(iteratorMethodInvocation());
+        iterator = context.dynamicContext().createTemporary(iteratorMethodInvocation());
     }
 
     @NotNull
     private JsBlock translate() {
-        JsBlock bodyBlock = generateCycleBody();
-        JsWhile cycle = new JsWhile(hasNextMethodInvocation(), bodyBlock);
-        return AstUtil.newBlock(iterator.assignmentExpression().makeStmt(), cycle);
-    }
-
-    //TODO: check whether complex logic with blocks is needed
-    @NotNull
-    private JsBlock generateCycleBody() {
-        JsBlock cycleBody = new JsBlock();
-        JsStatement parameterAssignment = newVar(parameterName, nextMethodInvocation());
-        JsNode originalBody = Translation.translateExpression(getLoopBody(expression), context().innerBlock(cycleBody));
-        cycleBody.getStatements().add(parameterAssignment);
-        cycleBody.getStatements().add(convertToBlock(originalBody));
-        return cycleBody;
+        return new JsBlock(new JsVars(iterator.first), new JsWhile(hasNextMethodInvocation(), translateBody(nextMethodInvocation())));
     }
 
     @NotNull
     private JsExpression nextMethodInvocation() {
-        FunctionDescriptor nextFunction = getNextFunction(bindingContext(), getLoopRange(expression));
-        return translateMethodInvocation(iterator.reference(), nextFunction);
+        return translateMethodInvocation(iterator.second, getNextFunction(bindingContext(), getLoopRange(expression)));
     }
 
     @NotNull
     private JsExpression hasNextMethodInvocation() {
-        CallableDescriptor hasNextFunction = getHasNextCallable(bindingContext(), getLoopRange(expression));
-        return translateMethodInvocation(iterator.reference(), hasNextFunction);
+        ResolvedCall<FunctionDescriptor> resolvedCall = getHasNextCallable(bindingContext(), getLoopRange(expression));
+        return translateMethodInvocation(iterator.second, resolvedCall);
     }
 
     @NotNull
     private JsExpression iteratorMethodInvocation() {
         JetExpression rangeExpression = getLoopRange(expression);
         JsExpression range = Translation.translateAsExpression(rangeExpression, context());
-        FunctionDescriptor iteratorFunction = getIteratorFunction(bindingContext(), rangeExpression);
-        return translateMethodInvocation(range, iteratorFunction);
+        ResolvedCall<FunctionDescriptor> resolvedCall = getIteratorFunction(bindingContext(), rangeExpression);
+        return translateMethodInvocation(range, resolvedCall);
     }
 
     @NotNull
     private JsExpression translateMethodInvocation(@Nullable JsExpression receiver,
-                                                   @NotNull CallableDescriptor descriptor) {
+            @NotNull ResolvedCall<FunctionDescriptor> resolvedCall) {
         return CallBuilder.build(context())
+                .resolvedCall(resolvedCall)
                 .receiver(receiver)
-                .descriptor(descriptor)
                 .translate();
     }
 }

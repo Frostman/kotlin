@@ -20,6 +20,7 @@ import com.google.common.collect.Lists;
 import com.intellij.openapi.util.io.FileUtil;
 import junit.framework.TestCase;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.jet.utils.Printer;
 
 import java.io.File;
 import java.io.IOException;
@@ -75,6 +76,7 @@ public class TestGenerator {
 
         p.println("import java.io.File;");
         p.println("import org.jetbrains.jet.JetTestUtils;");
+        p.println("import org.jetbrains.jet.test.InnerTestClasses;");
         p.println("import org.jetbrains.jet.test.TestMetadata;");
         p.println();
 
@@ -131,6 +133,9 @@ public class TestGenerator {
     private void generateTestClass(Printer p, TestClassModel testClassModel, boolean isStatic) {
         String staticModifier = isStatic ? "static " : "";
         generateMetadata(p, testClassModel);
+
+        generateInnerClassesAnnotation(p, testClassModel);
+
         p.println("public " + staticModifier + "class ", testClassModel.getName(), " extends ", baseTestClassName, " {");
         p.pushIndent();
 
@@ -195,10 +200,26 @@ public class TestGenerator {
         p.println("}");
     }
 
-    private void generateMetadata(Printer p, TestEntityModel testDataSource) {
+    private static void generateMetadata(Printer p, TestEntityModel testDataSource) {
         String dataString = testDataSource.getDataString();
         if (dataString != null) {
             p.println("@TestMetadata(\"", dataString, "\")");
         }
+    }
+
+    private static void generateInnerClassesAnnotation(Printer p, TestClassModel testClassModel) {
+        Collection<TestClassModel> innerTestClasses = testClassModel.getInnerTestClasses();
+        if (innerTestClasses.isEmpty()) return;
+        p.print("@InnerTestClasses({");
+        for (Iterator<TestClassModel> iterator = innerTestClasses.iterator(); iterator.hasNext(); ) {
+            TestClassModel innerTestClass = iterator.next();
+            if (!innerTestClass.isEmpty()) {
+                p.printWithNoIndent(testClassModel.getName(), ".", innerTestClass.getName(), ".class");
+                if (iterator.hasNext()) {
+                    p.printWithNoIndent(", ");
+                }
+            }
+        }
+        p.printlnWithNoIndent("})");
     }
 }
