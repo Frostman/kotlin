@@ -1,7 +1,6 @@
 package org.jetbrains.kotlin.doc.highlighter2
 
 import java.io.File
-import java.util.List
 import org.jetbrains.jet.internal.com.intellij.openapi.vfs.local.CoreLocalVirtualFile
 import org.jetbrains.jet.internal.com.intellij.psi.PsiElement
 import org.jetbrains.jet.internal.com.intellij.psi.PsiFile
@@ -116,8 +115,8 @@ class Html2CompilerPlugin(private val compilerArguments: KDocArguments) : Doclet
                                     }
 
                                     for (t in splitPsi(psiFile)) {
-                                        val text = t._1
-                                        val psi = t._2
+                                        val text = t.first
+                                        val psi = t.second
                                         span(className = classForPsi(psi)) {
                                             print(text.escapeHtml())
                                         }

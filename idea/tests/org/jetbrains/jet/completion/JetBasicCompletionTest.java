@@ -100,6 +100,14 @@ public class JetBasicCompletionTest extends JetCompletionTestBase {
         doTest();
     }
 
+    public void testInFileWithMultiDeclaration() {
+        doTest();
+    }
+
+    public void testInFileWithTypedef() {
+        doTest();
+    }
+
     public void testInFunInClassInitializer() {
         doTest();
     }
@@ -125,6 +133,10 @@ public class JetBasicCompletionTest extends JetCompletionTestBase {
     }
 
     public void testInMiddleOfPackage() {
+        doTest();
+    }
+
+    public void testInObjectInDelegationSpecifier() {
         doTest();
     }
 

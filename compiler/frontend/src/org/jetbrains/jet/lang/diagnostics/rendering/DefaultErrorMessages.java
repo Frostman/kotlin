@@ -95,7 +95,7 @@ public class DefaultErrorMessages {
         MAP.put(CANNOT_BE_IMPORTED, "Cannot import ''{0}'', functions and properties can be imported only from packages", NAME);
         MAP.put(USELESS_HIDDEN_IMPORT, "Useless import, it is hidden further");
         MAP.put(USELESS_SIMPLE_IMPORT, "Useless import, does nothing");
-        MAP.put(CLASS_HAS_KOTLIN_ANALOG, "This class has Kotlin analog(s) {0} that should be used instead.", CLASS_DESCRIPTOR_LIST);
+        MAP.put(PLATFORM_CLASS_MAPPED_TO_KOTLIN, "This class shouldn''t be used in Kotlin. Use {0} instead.", CLASS_DESCRIPTOR_LIST);
 
         MAP.put(CANNOT_INFER_PARAMETER_TYPE,
                 "Cannot infer a type for this parameter. To specify it explicitly use the {(p : Type) => ...} notation");
@@ -155,6 +155,8 @@ public class DefaultErrorMessages {
         MAP.put(MANY_CALLS_TO_THIS, "Only one call to 'this(...)' is allowed");
         MAP.put(NOTHING_TO_OVERRIDE, "''{0}'' overrides nothing", NAME);
         MAP.put(VIRTUAL_MEMBER_HIDDEN, "''{0}'' hides member of supertype ''{2}'' and needs ''override'' modifier", NAME, NAME, NAME);
+
+        MAP.put(DATA_CLASS_OVERRIDE_CONFLICT, "Function ''{0}'' generated for the data class conflicts with member of supertype ''{1}''", NAME, NAME);
 
         MAP.put(CANNOT_OVERRIDE_INVISIBLE_MEMBER, "''{0}'' cannot has no access to ''{1}'' in class {2}, so it cannot override it",
                 DescriptorRenderer.TEXT, DescriptorRenderer.TEXT, DescriptorRenderer.TEXT);
@@ -412,6 +414,7 @@ public class DefaultErrorMessages {
                 "Separate it with a semicolon (;) if it is not intended to be an argument.");
 
         MAP.put(NOT_AN_ANNOTATION_CLASS, "''{0}'' is not an annotation class", TO_STRING);
+        MAP.put(ANNOTATION_CLASS_WITH_BODY, "Body is not allowed for annotation class");
 
         MAP.put(DEFAULT_VALUE_NOT_ALLOWED_IN_OVERRIDE, "An overriding function is not allowed to specify default values for its parameters");
 

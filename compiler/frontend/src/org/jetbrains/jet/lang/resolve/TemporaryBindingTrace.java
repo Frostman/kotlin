@@ -41,7 +41,7 @@ public class TemporaryBindingTrace extends DelegatingBindingTrace {
         clear();
     }
 
-    public void commit(@NotNull Predicate<WritableSlice> filter, boolean commitDiagnostics) {
+    public void commit(@NotNull TraceEntryFilter filter, boolean commitDiagnostics) {
         addAllMyDataTo(trace, filter, commitDiagnostics);
         clear();
     }

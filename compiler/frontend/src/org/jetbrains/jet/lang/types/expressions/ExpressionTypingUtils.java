@@ -23,6 +23,7 @@ import com.intellij.psi.tree.TokenSet;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.JetNodeTypes;
+import org.jetbrains.jet.lang.ModuleConfiguration;
 import org.jetbrains.jet.lang.descriptors.*;
 import org.jetbrains.jet.lang.psi.*;
 import org.jetbrains.jet.lang.resolve.*;
@@ -44,6 +45,7 @@ import org.jetbrains.jet.lang.types.*;
 import org.jetbrains.jet.lang.types.checker.JetTypeChecker;
 import org.jetbrains.jet.lang.types.lang.JetStandardClasses;
 import org.jetbrains.jet.lang.types.lang.JetStandardLibrary;
+import org.jetbrains.jet.util.slicedmap.WritableSlice;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -181,11 +183,13 @@ public class ExpressionTypingUtils {
             @NotNull Project project,
             @NotNull JetExpression receiverExpression,
             @NotNull JetType receiverType,
-            @NotNull JetScope scope) {
-
+            @NotNull JetScope scope,
+            @NotNull ModuleConfiguration moduleConfiguration
+    ) {
         JetImportDirective importDirective = JetPsiFactory.createImportDirective(project, callableFQN.getFqName());
 
-        Collection<? extends DeclarationDescriptor> declarationDescriptors = new QualifiedExpressionResolver().analyseImportReference(importDirective, scope, new BindingTraceContext());
+        Collection<? extends DeclarationDescriptor> declarationDescriptors = new QualifiedExpressionResolver()
+                .analyseImportReference(importDirective, scope, new BindingTraceContext(), moduleConfiguration);
 
         List<CallableDescriptor> callableExtensionDescriptors = new ArrayList<CallableDescriptor>();
         ReceiverDescriptor receiverDescriptor = new ExpressionReceiver(receiverExpression, receiverType);
@@ -262,10 +266,22 @@ public class ExpressionTypingUtils {
             @NotNull ExpressionTypingContext context,
             @NotNull Name name
     ) {
-        JetReferenceExpression fake = JetPsiFactory.createSimpleName(context.expressionTypingServices.getProject(), "fake");
-        BindingTrace fakeTrace = TemporaryBindingTrace.create(context.trace);
+        final JetReferenceExpression fake = JetPsiFactory.createSimpleName(context.expressionTypingServices.getProject(), "fake");
+        TemporaryBindingTrace fakeTrace = TemporaryBindingTrace.create(context.trace);
         Call call = CallMaker.makeCall(fake, receiver, null, fake, Collections.<ValueArgument>emptyList());
-        return Pair.create(call, context.replaceBindingTrace(fakeTrace).resolveCallWithGivenName(call, fake, name));
+        OverloadResolutionResults<FunctionDescriptor> results =
+                context.replaceBindingTrace(fakeTrace).resolveCallWithGivenName(call, fake, name);
+        if (results.isSuccess()) {
+            fakeTrace.commit(new TraceEntryFilter() {
+                @Override
+                public boolean accept(@NotNull WritableSlice<?, ?> slice, Object key) {
+                    // excluding all entries related to fake expression
+                    // keys in RESOLUTION_RESULTS_FOR_FUNCTION slice have fake expression inside
+                    return key != fake && slice != RESOLUTION_RESULTS_FOR_FUNCTION;
+                }
+            }, false);
+        }
+        return Pair.create(call, results);
     }
 
     public static void defineLocalVariablesFromMultiDeclaration(
@@ -277,7 +293,7 @@ public class ExpressionTypingUtils {
     ) {
         int componentIndex = 1;
         for (JetMultiDeclarationEntry entry : multiDeclaration.getEntries()) {
-            final Name componentName = Name.identifier("component" + componentIndex);
+            final Name componentName = Name.identifier(DescriptorResolver.COMPONENT_FUNCTION_NAME_PREFIX + componentIndex);
             componentIndex++;
 
             JetType expectedType = getExpectedTypeForComponent(context, entry);

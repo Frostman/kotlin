@@ -84,6 +84,10 @@ public class ObjectGenTest extends CodegenTestCase {
         blackBoxFile("regressions/kt1737.kt");
     }
 
+    public void testK2719() {
+        blackBoxFile("regressions/kt2719.kt");
+    }
+
     public void testReceiverInConstructor() {
         blackBoxFile("objects/receiverInConstructor.kt");
     }
@@ -94,5 +98,21 @@ public class ObjectGenTest extends CodegenTestCase {
 
     public void testFlist() {
         blackBoxFile("objects/flist.kt");
+    }
+
+    public void testKt2398() {
+        blackBoxFile("regressions/kt2398.kt", "OKKO");
+    }
+
+    public void testKt2675() {
+        blackBoxFile("regressions/kt2675.kt");
+    }
+
+    public void testKt2663() {
+        blackBoxFile("regressions/kt2663.kt");
+    }
+
+    public void testKt2663_2() {
+        blackBoxFile("regressions/kt2663_2.kt");
     }
 }

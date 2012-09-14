@@ -31,6 +31,7 @@ import org.jetbrains.jet.lang.descriptors.annotations.AnnotationDescriptor;
 import org.jetbrains.jet.lang.psi.JetFile;
 import org.jetbrains.jet.lang.resolve.AnalyzingUtils;
 import org.jetbrains.jet.lang.resolve.BindingTraceContext;
+import org.jetbrains.jet.lang.resolve.DescriptorUtils;
 import org.jetbrains.jet.lang.resolve.TopDownAnalyzer;
 import org.jetbrains.jet.lang.resolve.name.Name;
 import org.jetbrains.jet.lang.resolve.scopes.JetScope;
@@ -99,12 +100,14 @@ public class JetStandardLibrary {
     private ClassDescriptor enumClass;
     private ClassDescriptor annotationClass;
     private ClassDescriptor volatileClass;
+    private ClassDescriptor dataClass;
 
     private JetType stringType;
     private JetType annotationType;
     private JetType tuple0Type;
 
     private EnumMap<PrimitiveType, ClassDescriptor> primitiveTypeToClass;
+    private EnumMap<PrimitiveType, ClassDescriptor> primitiveTypeToArrayClass;
     private EnumMap<PrimitiveType, JetType> primitiveTypeToJetType;
     private EnumMap<PrimitiveType, JetType> primitiveTypeToNullableJetType;
     private EnumMap<PrimitiveType, JetType> primitiveTypeToArrayJetType;
@@ -170,7 +173,9 @@ public class JetStandardLibrary {
             this.arrayClass = getStdClassByName("Array");
             this.throwableClass = getStdClassByName("Throwable");
             this.enumClass = getStdClassByName("Enum");
+
             this.volatileClass = getStdClassByName("volatile");
+            this.dataClass = getStdClassByName("data");
 
             this.iterableClass = getStdClassByName("Iterable");
             this.iteratorClass = getStdClassByName("Iterator");
@@ -187,6 +192,7 @@ public class JetStandardLibrary {
             primitiveTypeToClass = new EnumMap<PrimitiveType, ClassDescriptor>(PrimitiveType.class);
             primitiveTypeToJetType = new EnumMap<PrimitiveType, JetType>(PrimitiveType.class);
             primitiveTypeToNullableJetType = new EnumMap<PrimitiveType, JetType>(PrimitiveType.class);
+            primitiveTypeToArrayClass = new EnumMap<PrimitiveType, ClassDescriptor>(PrimitiveType.class);
             primitiveTypeToArrayJetType = new EnumMap<PrimitiveType, JetType>(PrimitiveType.class);
             primitiveJetTypeToJetArrayType = new HashMap<JetType, JetType>();
             jetArrayTypeToPrimitiveJetType = new HashMap<JetType, JetType>();
@@ -213,6 +219,7 @@ public class JetStandardLibrary {
         primitiveTypeToClass.put(primitiveType, clazz);
         primitiveTypeToJetType.put(primitiveType, type);
         primitiveTypeToNullableJetType.put(primitiveType, TypeUtils.makeNullable(type));
+        primitiveTypeToArrayClass.put(primitiveType, arrayClazz);
         primitiveTypeToArrayJetType.put(primitiveType, arrayType);
         primitiveJetTypeToJetArrayType.put(type, arrayType);
         jetArrayTypeToPrimitiveJetType.put(arrayType, type);
@@ -259,6 +266,12 @@ public class JetStandardLibrary {
     public ClassDescriptor getPrimitiveClassDescriptor(PrimitiveType primitiveType) {
         initStdClasses();
         return primitiveTypeToClass.get(primitiveType);
+    }
+
+    @NotNull
+    public ClassDescriptor getPrimitiveArrayClassDescriptor(PrimitiveType primitiveType) {
+        initStdClasses();
+        return primitiveTypeToArrayClass.get(primitiveType);
     }
 
     @NotNull
@@ -425,14 +438,14 @@ public class JetStandardLibrary {
 
     @NotNull
     public ClassDescriptor getMapEntry() {
-        ClassifierDescriptor entry = getMap().getDefaultType().getMemberScope().getClassifier(Name.identifier("Entry"));
+        ClassifierDescriptor entry = DescriptorUtils.getInnerClassByName(getMap(), "Entry");
         assert entry instanceof ClassDescriptor;
         return (ClassDescriptor) entry;
     }
 
     @NotNull
     public ClassDescriptor getMutableMapEntry() {
-        ClassifierDescriptor entry = getMutableMap().getDefaultType().getMemberScope().getClassifier(Name.identifier("MutableEntry"));
+        ClassifierDescriptor entry = DescriptorUtils.getInnerClassByName(getMutableMap(), "MutableEntry");
         assert entry instanceof ClassDescriptor;
         return (ClassDescriptor) entry;
     }
@@ -499,6 +512,11 @@ public class JetStandardLibrary {
     }
 
     @NotNull
+    public ClassDescriptor getDataClassAnnotation() {
+        return dataClass;
+    }
+
+    @NotNull
     public JetType getArrayType(@NotNull Variance projectionType, @NotNull JetType argument) {
         List<TypeProjection> types = Collections.singletonList(new TypeProjection(projectionType, argument));
         return new JetTypeImpl(
@@ -559,10 +577,24 @@ public class JetStandardLibrary {
     }
 
     public boolean isVolatile(@NotNull PropertyDescriptor descriptor) {
+        return containsAnnotation(descriptor, volatileClass);
+    }
+
+    public static boolean isData(@NotNull ClassDescriptor descriptor) {
+        if (initializing) {
+            // This is a hack to make this method callable while resolving standard library
+            // (otherwise getInstance() would throw an Exception)
+            // This also means that "data" annotation has no effect in standard library
+            return false;
+        }
+        return containsAnnotation(descriptor, getInstance().dataClass);
+    }
+
+    private static boolean containsAnnotation(DeclarationDescriptor descriptor, ClassDescriptor annotationClass) {
         List<AnnotationDescriptor> annotations = descriptor.getOriginal().getAnnotations();
         if (annotations != null) {
-            for(AnnotationDescriptor annotation: annotations) {
-                if (volatileClass.equals(annotation.getType().getConstructor().getDeclarationDescriptor())) {
+            for (AnnotationDescriptor annotation : annotations) {
+                if (annotationClass.equals(annotation.getType().getConstructor().getDeclarationDescriptor())) {
                     return true;
                 }
             }

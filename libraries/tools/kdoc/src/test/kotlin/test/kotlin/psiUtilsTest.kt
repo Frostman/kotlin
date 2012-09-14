@@ -1,6 +1,5 @@
 package test.kotlin
 
-import java.util.List
 import org.jetbrains.jet.cli.jvm.JVMConfigurationKeys
 import org.jetbrains.jet.cli.jvm.compiler.JetCoreEnvironment
 import org.jetbrains.jet.config.CompilerConfiguration
@@ -52,7 +51,7 @@ class PsiUtilsTest {
     [Test]
     fun splitPsi() {
         val file = createFile("class Foo")
-        val items: List<String> = splitPsi(file).map { t -> t._1 }
+        val items: List<String> = splitPsi(file).map { t -> t.first }
         Assert.assertEquals(arrayList("class", " ", "Foo"), items)
     }
 

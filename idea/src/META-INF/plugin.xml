@@ -6,7 +6,7 @@
   <version>@snapshot@</version>
   <vendor url="http://www.jetbrains.com">JetBrains Inc.</vendor>
 
-  <idea-version since-build="ideaIC-122.29" until-build="ideaIC-122.9999" />
+  <idea-version since-build="ideaIC-122.327" until-build="ideaIC-122.9999" />
 
   <depends optional="true">JUnit</depends>
 
@@ -28,6 +28,9 @@
       </component>
       <component>
         <implementation-class>org.jetbrains.jet.plugin.OutdatedKotlinRuntimeNotification</implementation-class>
+      </component>
+      <component>
+        <implementation-class>org.jetbrains.jet.plugin.codeInsight.ktSignature.KotlinSignatureInJavaMarkerUpdater</implementation-class>
       </component>
   </project-components>
 
@@ -63,7 +66,10 @@
          <add-to-group group-id="CodeMenu" anchor="last"/>
      </action>
 
-
+     <group id="EditorGutterKotlinPopupMenu">
+       <action id="ShowKotlinSignatures" class="org.jetbrains.jet.plugin.codeInsight.ktSignature.ShowKotlinSignaturesAction"/>
+       <add-to-group group-id="EditorGutterPopupMenu" anchor="last" />
+     </group>
   </actions>
 
   <extensions defaultExtensionNs="com.intellij">
@@ -172,6 +178,7 @@
       <configurationProducer implementation="org.jetbrains.jet.plugin.run.JetRunConfigurationProducer"/>
       <configurationProducer implementation="org.jetbrains.jet.plugin.run.JetJUnitConfigurationProducer"/>
       <codeInsight.lineMarkerProvider language="jet" implementationClass="org.jetbrains.jet.plugin.highlighter.JetLineMarkerProvider"/>
+      <codeInsight.lineMarkerProvider language="JAVA" implementationClass="org.jetbrains.jet.plugin.codeInsight.ktSignature.KotlinSignatureInJavaMarkerProvider"/>
       <iconProvider implementation="org.jetbrains.jet.plugin.JetIconProvider"/>
       <itemPresentationProvider implementationClass="org.jetbrains.jet.plugin.presentation.JetFunctionPresenter" forClass="org.jetbrains.jet.lang.psi.JetNamedFunction"/>
       <itemPresentationProvider implementationClass="org.jetbrains.jet.plugin.presentation.JetClassPresenter" forClass="org.jetbrains.jet.lang.psi.JetClass"/>
@@ -221,6 +228,11 @@
 
       <intentionAction>
         <className>org.jetbrains.jet.plugin.intentions.SpecifyTypeExplicitlyAction</className>
+        <category>Kotlin</category>
+      </intentionAction>
+
+      <intentionAction>
+        <className>org.jetbrains.jet.plugin.codeInsight.ktSignature.AddKotlinSignatureAnnotation</className>
         <category>Kotlin</category>
       </intentionAction>
 

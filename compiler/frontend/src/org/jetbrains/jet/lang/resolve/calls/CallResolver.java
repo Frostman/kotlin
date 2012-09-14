@@ -569,9 +569,9 @@ public class CallResolver {
                     task.getResolvedCalls().add(call);
                 }
 
-                context.candidateCall.getTrace().addAllMyDataTo(traceForResolutionCache, new Predicate<WritableSlice>() {
+                context.candidateCall.getTrace().addAllMyDataTo(traceForResolutionCache, new TraceEntryFilter() {
                     @Override
-                    public boolean apply(@Nullable WritableSlice slice) {
+                    public boolean accept(@NotNull WritableSlice<?, ?> slice, Object key) {
                         return slice == BindingContext.RESOLUTION_RESULTS_FOR_FUNCTION || slice == BindingContext.RESOLUTION_RESULTS_FOR_PROPERTY ||
                                slice == BindingContext.TRACE_DELTAS_CACHE;
                     }
@@ -798,9 +798,12 @@ public class CallResolver {
         JetType effectiveExpectedType = getEffectiveExpectedType(valueParameterDescriptor, valueArgument);
         TemporaryBindingTrace traceForUnknown = TemporaryBindingTrace.create(context.trace);
         JetExpression argumentExpression = valueArgument.getArgumentExpression();
-        JetType type = argumentExpression != null ? expressionTypingServices.getType(
-                context.scope, argumentExpression, substitutor.substitute(valueParameterDescriptor.getType(), Variance.INVARIANT),
-                context.dataFlowInfo, traceForUnknown) : null;
+        JetType type = argumentExpression != null
+                       ? expressionTypingServices.getType(
+                            context.scope, argumentExpression,
+                            substitutor.substitute(effectiveExpectedType, Variance.INVARIANT),
+                            context.dataFlowInfo, traceForUnknown)
+                       : null;
         constraintSystem.addSupertypeConstraint(effectiveExpectedType, type, ConstraintPosition.getValueParameterPosition(
                 valueParameterDescriptor.getIndex()));
         //todo no return
@@ -816,6 +819,7 @@ public class CallResolver {
                 ExpressionReceiver expressionReceiver = (ExpressionReceiver) original;
                 if (autoCastReceiver.canCast()) {
                     trace.record(AUTOCAST, expressionReceiver.getExpression(), autoCastReceiver.getType());
+                    trace.record(EXPRESSION_TYPE, expressionReceiver.getExpression(), autoCastReceiver.getType());
                 }
                 else {
                     trace.report(AUTOCAST_IMPOSSIBLE.on(expressionReceiver.getExpression(), autoCastReceiver.getType(), expressionReceiver.getExpression().getText()));

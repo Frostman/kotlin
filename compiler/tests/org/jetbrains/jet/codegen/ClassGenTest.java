@@ -58,6 +58,38 @@ public class ClassGenTest extends CodegenTestCase {
         blackBoxFile("classes/delegationJava.kt");
     }
 
+    public void testDelegationToVal() throws Exception {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        loadFile("classes/delegationToVal.kt");
+        //        System.out.println(generateToText());
+        final ClassFileFactory state = generateClassesInFile();
+        final GeneratedClassLoader loader = createClassLoader(state);
+        final Class aClass = loader.loadClass("namespace");
+        assertEquals("OK", aClass.getMethod("box").invoke(null));
+
+        final Class test = loader.loadClass("Test");
+        try {
+            test.getDeclaredField("$delegate_0");
+            fail("$delegate_0 field generated for class Test but should not");
+        }
+        catch (NoSuchFieldException e) {}
+
+        final Class test2 = loader.loadClass("Test2");
+        try {
+            test2.getDeclaredField("$delegate_0");
+            fail("$delegate_0 field generated for class Test2 but should not");
+        }
+        catch (NoSuchFieldException e) {}
+
+        final Class test3 = loader.loadClass("Test3");
+        final Class iActing = loader.loadClass("IActing");
+        final Object obj = test3.newInstance();
+        assertTrue(iActing.isInstance(obj));
+        final Method iActingMethod = iActing.getMethod("act");
+        assertEquals("OK", iActingMethod.invoke(obj));
+        assertEquals("OKOK", iActingMethod.invoke(test3.getMethod("getActing").invoke(obj)));
+    }
+
     public void testInheritanceAndDelegation_DelegatingDefaultConstructorProperties() throws Exception {
         createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
         blackBoxFile("classes/inheritance.jet");
@@ -76,6 +108,11 @@ public class ClassGenTest extends CodegenTestCase {
     public void testInheritanceAndDelegation4() throws Exception {
         createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
         blackBoxFile("classes/delegation4.kt");
+    }
+
+    public void testDelegationMethodsWithArgs() throws Exception {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        blackBoxFile("classes/delegationMethodsWithArgs.kt");
     }
 
     public void testFunDelegation() throws Exception {
@@ -115,6 +152,11 @@ public class ClassGenTest extends CodegenTestCase {
     public void testInheritedInnerClass() throws Exception {
         createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
         blackBoxFile("classes/inheritedInnerClass.jet");
+    }
+
+    public void testKt2532() throws Exception {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        blackBoxFile("classes/kt2532.kt");
     }
 
     public void testInitializerBlock() throws Exception {
@@ -173,6 +215,11 @@ public class ClassGenTest extends CodegenTestCase {
     public void testClassObject() throws Exception {
         createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
         blackBoxFile("classes/classObject.jet");
+    }
+
+    public void testClassObjectInTrait() throws Exception {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        blackBoxFile("classes/classObjectInTrait.jet");
     }
 
     public void testClassObjectMethod() throws Exception {
@@ -339,6 +386,7 @@ public class ClassGenTest extends CodegenTestCase {
     public void testKt1018() throws Exception {
         createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
         blackBoxFile("regressions/kt1018.kt");
+        System.out.println(generateToText());
     }
 
     public void testKt1120() throws Exception {
@@ -547,5 +595,10 @@ public class ClassGenTest extends CodegenTestCase {
     public void testKt2711() {
         createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
         blackBoxFile("regressions/kt2711.kt");
+    }
+
+    public void testKt2626() {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        blackBoxFile("regressions/kt2626.kt");
     }
 }

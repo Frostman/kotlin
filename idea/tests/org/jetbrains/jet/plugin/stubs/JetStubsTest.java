@@ -75,6 +75,13 @@ public class JetStubsTest extends LightCodeInsightFixtureTestCase {
                     "      TYPE_PARAMETER:PsiJetTypeParameterStubImpl[name=T extendText=null]\n");
     }
 
+    public void testFunctionInNotNamedObject() {
+        doBuildTest("object { fun testing() = 12 }",
+                    "PsiJetFileStubImpl[package=]\n" +
+                    "  FUN:PsiJetFunctionStubImpl[name=testing]\n" +
+                    "    VALUE_PARAMETER_LIST:PsiJetParameterListStubImpl\n");
+    }
+
     public void testFunctionParameters() {
         doBuildTest("fun some(t: Int, other: String = \"hello\") { }",
                     "PsiJetFileStubImpl[package=]\n" +
@@ -145,7 +152,7 @@ public class JetStubsTest extends LightCodeInsightFixtureTestCase {
     }
 
     public void testAnnotationClass() {
-        doBuildTest("annotation class Test {}",
+        doBuildTest("annotation class Test",
                     "PsiJetFileStubImpl[package=]\n" +
                     "  CLASS:PsiJetClassStubImpl[isAnnotation name=Test fqn=Test superNames=[]]\n" +
                     "    TYPE_PARAMETER_LIST:PsiJetTypeParameterListStubImpl\n");

@@ -58,6 +58,7 @@ import static org.jetbrains.jet.lexer.JetTokens.OVERRIDE_KEYWORD;
 public class DescriptorResolver {
     public static final Name VALUE_OF_METHOD_NAME = Name.identifier("valueOf");
     public static final Name VALUES_METHOD_NAME = Name.identifier("values");
+    public static final String COMPONENT_FUNCTION_NAME_PREFIX = "component";
 
     @NotNull
     private TypeResolver typeResolver;
@@ -129,23 +130,31 @@ public class DescriptorResolver {
     ) {
         List<JetType> supertypes = Lists.newArrayList();
         List<JetDelegationSpecifier> delegationSpecifiers = jetClass.getDelegationSpecifiers();
-        boolean isEnum = classDescriptor.getKind() == ClassKind.ENUM_CLASS;
-        if (delegationSpecifiers.isEmpty()) {
-            if (!isEnum) {
-                supertypes.add(getDefaultSupertype(jetClass, trace));
-            }
+        Collection<JetType> declaredSupertypes = resolveDelegationSpecifiers(
+                scope,
+                delegationSpecifiers,
+                typeResolver, trace, false);
+
+        for (JetType declaredSupertype : declaredSupertypes) {
+            addValidSupertype(supertypes, declaredSupertype);
         }
-        else {
-            Collection<JetType> declaredSupertypes = resolveDelegationSpecifiers(
-                    scope,
-                    delegationSpecifiers,
-                    typeResolver, trace, false);
-            supertypes.addAll(declaredSupertypes);
-        }
-        if (isEnum && !containsClass(supertypes)) {
+
+        if (classDescriptor.getKind() == ClassKind.ENUM_CLASS && !containsClass(supertypes)) {
             supertypes.add(0, JetStandardLibrary.getInstance().getEnumType(classDescriptor.getDefaultType()));
         }
+
+        if (supertypes.isEmpty()) {
+            JetType defaultSupertype = getDefaultSupertype(jetClass, trace);
+            addValidSupertype(supertypes, defaultSupertype);
+        }
+
         return supertypes;
+    }
+
+    private static void addValidSupertype(List<JetType> supertypes, JetType declaredSupertype) {
+        if (!ErrorUtils.isErrorType(declaredSupertype)) {
+            supertypes.add(declaredSupertype);
+        }
     }
 
     private boolean containsClass(Collection<JetType> result) {
@@ -292,6 +301,40 @@ public class DescriptorResolver {
                 isInline);
 
         BindingContextUtils.recordFunctionDeclarationToDescriptor(trace, function, functionDescriptor);
+        return functionDescriptor;
+    }
+
+    @NotNull
+    public static SimpleFunctionDescriptor createComponentFunctionDescriptor(
+            int parameterIndex,
+            @NotNull PropertyDescriptor property,
+            @NotNull ValueParameterDescriptor parameter,
+            @NotNull ClassDescriptor classDescriptor,
+            @NotNull BindingTrace trace
+    ) {
+        String functionName = COMPONENT_FUNCTION_NAME_PREFIX + parameterIndex;
+        JetType returnType = property.getType();
+
+        SimpleFunctionDescriptorImpl functionDescriptor = new SimpleFunctionDescriptorImpl(
+                classDescriptor,
+                Collections.<AnnotationDescriptor>emptyList(),
+                Name.identifier(functionName),
+                CallableMemberDescriptor.Kind.SYNTHESIZED
+        );
+
+        functionDescriptor.initialize(
+                null,
+                classDescriptor.getImplicitReceiver(),
+                Collections.<TypeParameterDescriptor>emptyList(),
+                Collections.<ValueParameterDescriptor>emptyList(),
+                returnType,
+                Modality.FINAL,
+                property.getVisibility(),
+                true
+        );
+
+        trace.record(BindingContext.DATA_CLASS_COMPONENT_FUNCTION, parameter, functionDescriptor);
+
         return functionDescriptor;
     }
 
@@ -1076,6 +1119,7 @@ public class DescriptorResolver {
         getter.initialize(propertyDescriptor.getType());
 
         trace.record(BindingContext.PRIMARY_CONSTRUCTOR_PARAMETER, parameter, propertyDescriptor);
+        trace.record(BindingContext.VALUE_PARAMETER_AS_PROPERTY, valueParameter, propertyDescriptor);
         return propertyDescriptor;
     }
 

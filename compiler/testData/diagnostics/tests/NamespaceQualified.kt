@@ -4,8 +4,8 @@
 package foobar.a
     import java.*
 
-    val a : <!CLASS_HAS_KOTLIN_ANALOG!>util.List<Int><!>? = null
-    val a1 : List<Int>? = null
+    val a : <!PLATFORM_CLASS_MAPPED_TO_KOTLIN!>util.List<Int><!>? = null
+    val a1 : <!UNRESOLVED_REFERENCE!>ArrayList<!><Int>? = null
 
 // FILE: b.kt
 package foobar

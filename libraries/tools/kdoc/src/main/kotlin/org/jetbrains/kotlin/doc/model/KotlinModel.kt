@@ -438,7 +438,7 @@ class KModel(val context: BindingContext, val config: KDocConfig, val sourceDirs
         return null
     }
 
-    fun addTypeParameters(answer: List<KTypeParameter>, descriptors: List<TypeParameterDescriptor?>): Unit {
+    fun addTypeParameters(answer: MutableList<KTypeParameter>, descriptors: List<TypeParameterDescriptor?>): Unit {
         for (typeParam in descriptors) {
             if (typeParam != null) {
                 val p = createTypeParameter(typeParam)
@@ -734,13 +734,13 @@ class TemplateLinkRenderer(val annotated: KAnnotated, val template: KDocTemplate
     // TODO dirty hack - remove when this issue is fixed
     // http://youtrack.jetbrains.com/issue/KT-1524
     val hackedLinks = hashMap(
-            #("IllegalArgumentException", #("java.lang", "java/lang/IllegalArgumentException.html")),
-            #("IllegalStateException", #("java.lang", "java/lang/IllegalStateException.html")),
-            #("Map.Entry", #("java.util", "java/util/Map.Entry.html")),
-            #("System.in", #("java.lang", "java/lang/System.html#in")),
-            #("System.out", #("java.lang", "java/lang/System.html#in")),
-            #("#equals()", #("java.lang", "java/lang/Object.html#equals(java.lang.Object)")),
-            #("#hashCode()", #("java.lang", "java/lang/Object.html#hashCode()"))
+            Pair("IllegalArgumentException", Pair("java.lang", "java/lang/IllegalArgumentException.html")),
+            Pair("IllegalStateException", Pair("java.lang", "java/lang/IllegalStateException.html")),
+            Pair("Map.Entry", Pair("java.util", "java/util/Map.Entry.html")),
+            Pair("System.in", Pair("java.lang", "java/lang/System.html#in")),
+            Pair("System.out", Pair("java.lang", "java/lang/System.html#in")),
+            Pair("#equals()", Pair("java.lang", "java/lang/Object.html#equals(java.lang.Object)")),
+            Pair("#hashCode()", Pair("java.lang", "java/lang/Object.html#hashCode()"))
     )
 
 
@@ -774,7 +774,7 @@ class TemplateLinkRenderer(val annotated: KAnnotated, val template: KDocTemplate
                     // TODO even hacker than the above hack!
                     val link = hackedLinks.get(text)
                     if (link != null) {
-                        href = annotated.model.config.resolveLink(link._1) + link._2
+                        href = annotated.model.config.resolveLink(link.first) + link.second
                     }
                 }
                 if (href != null) {
@@ -1045,7 +1045,7 @@ class KPackage(model: KModel, val descriptor: NamespaceDescriptor,
     fun packageProperties() = properties.filter{ it.extensionClass == null && it.isPublic() }
 }
 
-class KType(val jetType: JetType, model: KModel, val klass: KClass?, val arguments: List<KType> = ArrayList<KType>())
+class KType(val jetType: JetType, model: KModel, val klass: KClass?, val arguments: MutableList<KType> = ArrayList<KType>())
 : KNamed(klass?.name ?: jetType.toString().sure(), model, jetType.getConstructor().getDeclarationDescriptor().sure()) {
     {
         if (klass != null) {
@@ -1056,7 +1056,7 @@ class KType(val jetType: JetType, model: KModel, val klass: KClass?, val argumen
                 val argJetType = arg.getType()
                 val t = model.getType(argJetType)
                 if (t != null) {
-                    $arguments.add(t)
+                    arguments.add(t)
                 }
             }
         }
@@ -1077,10 +1077,10 @@ class KClass(
     val simpleName = descriptor.getName().getName()
     var group: String = "Other"
     var annotations: List<KAnnotation> = arrayList<KAnnotation>()
-    var typeParameters: List<KTypeParameter> = arrayList<KTypeParameter>()
+    var typeParameters: MutableList<KTypeParameter> = arrayList<KTypeParameter>()
     var since: String = ""
     var authors: List<String> = arrayList<String>()
-    var baseClasses: List<KType> = arrayList<KType>()
+    var baseClasses: MutableList<KType> = arrayList<KType>()
     var nestedClasses: List<KClass> = arrayList<KClass>()
 
     public override fun compareTo(other: KClass): Int = name.compareTo(other.name)
@@ -1143,7 +1143,7 @@ class KClass(
     fun isInterface() = kind == "interface"
 
     /** Returns all of the base classes and all of their descendants */
-    fun descendants(answer: Set<KClass> = LinkedHashSet<KClass>()): Set<KClass> {
+    fun descendants(answer: MutableSet<KClass> = LinkedHashSet<KClass>()): Set<KClass> {
         for (b in baseClasses) {
             val c = b.klass
             if (c != null) {
@@ -1161,7 +1161,7 @@ class KFunction(val descriptor: CallableDescriptor, val owner: KClassOrPackage, 
         var receiverType: KType? = null,
         var extensionClass: KClass? = null,
         var modifiers: List<String> = arrayList<String>(),
-        var typeParameters: List<KTypeParameter> = arrayList<KTypeParameter>(),
+        var typeParameters: MutableList<KTypeParameter> = arrayList<KTypeParameter>(),
         var exceptions: List<KClass> = arrayList<KClass>(),
         var annotations: List<KAnnotation> = arrayList<KAnnotation>()): KAnnotated(owner.model, descriptor), Comparable<KFunction> {
 

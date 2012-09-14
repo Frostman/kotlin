@@ -25,12 +25,12 @@ import org.jetbrains.jet.lang.descriptors.annotations.AnnotationDescriptor;
 import org.jetbrains.jet.lang.psi.*;
 import org.jetbrains.jet.lang.resolve.BindingContext;
 import org.jetbrains.jet.lang.resolve.BindingTrace;
-import org.jetbrains.jet.lang.resolve.DescriptorUtils;
 import org.jetbrains.jet.lang.resolve.java.JvmAbi;
 import org.jetbrains.jet.lang.resolve.java.JvmClassName;
 import org.jetbrains.jet.lang.resolve.name.FqName;
 import org.jetbrains.jet.lang.resolve.name.Name;
 import org.jetbrains.jet.lang.resolve.scopes.JetScope;
+import org.jetbrains.jet.lang.types.JetType;
 import org.jetbrains.jet.lang.types.lang.JetStandardClasses;
 import org.jetbrains.jet.util.slicedmap.Slices;
 import org.jetbrains.jet.util.slicedmap.WritableSlice;
@@ -90,7 +90,7 @@ public class CodegenBinding {
         return classNameForScriptDescriptor(bindingContext, scriptDescriptor);
     }
 
-    public static ClassDescriptor eclosingClassDescriptor(BindingContext bindingContext, ClassDescriptor descriptor) {
+    public static ClassDescriptor enclosingClassDescriptor(BindingContext bindingContext, ClassDescriptor descriptor) {
         final CalculatedClosure closure = bindingContext.get(CLOSURE, descriptor);
         return closure == null ? null : closure.getEnclosingClass();
     }
@@ -132,18 +132,39 @@ public class CodegenBinding {
 
         recordClosure(bindingTrace, null, classDescriptor, null, className, false);
 
+        assert PsiCodegenPredictor.checkPredictedClassNameForFun(bindingTrace.getBindingContext(), scriptDescriptor, classDescriptor);
         bindingTrace.record(CLASS_FOR_FUNCTION, scriptDescriptor, classDescriptor);
     }
 
-    private static boolean canHaveOuter(BindingContext bindingContext, ClassDescriptor classDescriptor) {
-        if (DescriptorUtils.isClassObject(classDescriptor)) {
-            return false;
-        }
-        if (classDescriptor.getKind() == ClassKind.ENUM_CLASS || classDescriptor.getKind() == ClassKind.ENUM_ENTRY) {
+    private static boolean canHaveOuter(BindingContext bindingContext, @NotNull ClassDescriptor classDescriptor) {
+        final ClassKind kind = classDescriptor.getKind();
+        if (isSingleton(bindingContext, classDescriptor)) {
             return false;
         }
 
-        return eclosingClassDescriptor(bindingContext, classDescriptor) != null;
+        if (kind == ClassKind.ENUM_CLASS) {
+            return false;
+        }
+
+        final ClassDescriptor enclosing = enclosingClassDescriptor(bindingContext, classDescriptor);
+        return enclosing != null && !isSingleton(bindingContext, enclosing);
+    }
+
+    public static boolean isSingleton(BindingContext bindingContext, @NotNull ClassDescriptor classDescriptor) {
+        final ClassKind kind = classDescriptor.getKind();
+        if (kind == ClassKind.CLASS_OBJECT) {
+            return true;
+        }
+
+        if (kind == ClassKind.OBJECT && isObjectDeclaration(bindingContext, classDescriptor)) {
+            return true;
+        }
+
+        if (kind == ClassKind.ENUM_ENTRY) {
+            return true;
+        }
+
+        return false;
     }
 
     static void recordClosure(
@@ -154,7 +175,7 @@ public class CodegenBinding {
             JvmClassName name,
             boolean functionLiteral
     ) {
-        final JetDelegatorToSuperCall superCall = CodegenUtil.findSuperCall(element, bindingTrace.getBindingContext());
+        final JetDelegatorToSuperCall superCall = findSuperCall(bindingTrace.getBindingContext(), element);
 
         CallableDescriptor enclosingReceiver = null;
         if (classDescriptor.getContainingDeclaration() instanceof CallableDescriptor) {
@@ -170,6 +191,7 @@ public class CodegenBinding {
 
         final MutableClosure closure = new MutableClosure(superCall, enclosing, enclosingReceiver);
 
+        assert PsiCodegenPredictor.checkPredictedNameFromPsi(bindingTrace, classDescriptor, name);
         bindingTrace.record(FQN, classDescriptor, name);
         bindingTrace.record(CLOSURE, classDescriptor, closure);
 
@@ -204,7 +226,7 @@ public class CodegenBinding {
         for (FqName name : names) {
             final NamespaceDescriptor namespaceDescriptor = bindingContext.get(BindingContext.FQNAME_TO_NAMESPACE_DESCRIPTOR, name);
             final Collection<JetFile> jetFiles = bindingContext.get(NAMESPACE_TO_FILES, namespaceDescriptor);
-            if(jetFiles != null)
+            if (jetFiles != null)
                 answer.addAll(jetFiles);
         }
         return answer;
@@ -219,6 +241,14 @@ public class CodegenBinding {
     public static boolean isObjectLiteral(BindingContext bindingContext, ClassDescriptor declaration) {
         PsiElement psiElement = descriptorToDeclaration(bindingContext, declaration);
         if (psiElement instanceof JetObjectDeclaration && ((JetObjectDeclaration) psiElement).isObjectLiteral()) {
+            return true;
+        }
+        return false;
+    }
+
+    public static boolean isObjectDeclaration(BindingContext bindingContext, ClassDescriptor declaration) {
+        PsiElement psiElement = descriptorToDeclaration(bindingContext, declaration);
+        if (psiElement instanceof JetObjectDeclaration && !((JetObjectDeclaration) psiElement).isObjectLiteral()) {
             return true;
         }
         return false;
@@ -241,25 +271,17 @@ public class CodegenBinding {
         return false;
     }
 
-    public static JvmClassName getJvmClassName(BindingTrace bindingTrace, ClassDescriptor classDescriptor) {
-        classDescriptor = (ClassDescriptor) classDescriptor.getOriginal();
-        final JvmClassName name = bindingTrace.getBindingContext().get(FQN, classDescriptor);
-        if(name != null) {
-            return name;
-        }
-
-        return getJvmInternalName(bindingTrace, classDescriptor);
-    }
-
     @NotNull
-    private static JvmClassName getJvmInternalName(BindingTrace bindingTrace, @NotNull DeclarationDescriptor descriptor) {
+    public static JvmClassName getJvmInternalName(BindingTrace bindingTrace, @NotNull DeclarationDescriptor descriptor) {
         descriptor = descriptor.getOriginal();
         JvmClassName name = bindingTrace.getBindingContext().get(FQN, descriptor);
-        if(name != null) {
+        if (name != null) {
             return name;
         }
 
         name = JvmClassName.byInternalName(getJvmInternalFQNameImpl(bindingTrace, descriptor));
+
+        assert PsiCodegenPredictor.checkPredictedNameFromPsi(bindingTrace, descriptor, name);
         bindingTrace.record(FQN, descriptor, name);
         return name;
     }
@@ -324,5 +346,31 @@ public class CodegenBinding {
         //noinspection SuspiciousMethodCalls
         final CalculatedClosure closure = bindingContext.get(CLOSURE, classDescriptor);
         return closure != null && closure.getCaptureThis() != null;
+    }
+
+    private static JetDelegatorToSuperCall findSuperCall(
+            BindingContext bindingContext,
+            JetElement classOrObject
+    ) {
+        if (!(classOrObject instanceof JetClassOrObject)) {
+            return null;
+        }
+
+        if (classOrObject instanceof JetClass && ((JetClass) classOrObject).isTrait()) {
+            return null;
+        }
+        for (JetDelegationSpecifier specifier : ((JetClassOrObject) classOrObject).getDelegationSpecifiers()) {
+            if (specifier instanceof JetDelegatorToSuperCall) {
+                JetType superType = bindingContext.get(TYPE, specifier.getTypeReference());
+                assert superType != null;
+                ClassDescriptor superClassDescriptor = (ClassDescriptor) superType.getConstructor().getDeclarationDescriptor();
+                assert superClassDescriptor != null;
+                if (!CodegenUtil.isInterface(superClassDescriptor)) {
+                    return (JetDelegatorToSuperCall) specifier;
+                }
+            }
+        }
+
+        return null;
     }
 }

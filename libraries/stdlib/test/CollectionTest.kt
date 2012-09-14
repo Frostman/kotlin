@@ -156,6 +156,14 @@ class CollectionTest {
         }
     }
 
+    test fun partition() {
+        val data = arrayList("foo", "bar", "something", "xyz")
+        val pair = data.partition{it.size == 3}
+
+        assertEquals(arrayList("foo", "bar", "xyz"), pair.first, "pair.first")
+        assertEquals(arrayList("something"), pair.second, "pair.second")
+    }
+
     test fun reduce() {
         expect("1234") {
             val list = arrayList("1", "2", "3", "4")
@@ -184,7 +192,7 @@ class CollectionTest {
         assertEquals(4, byLength.size())
 
         val l3 = byLength.getOrElse(3, {ArrayList<String>()})
-        assertEquals(2, l3.size)
+        assertEquals(2, l3?.size)
     }
 
     test fun makeString() {

@@ -31,11 +31,11 @@ import org.jetbrains.jet.codegen.signature.BothSignatureWriter;
 import org.jetbrains.jet.codegen.signature.JvmMethodParameterKind;
 import org.jetbrains.jet.codegen.signature.JvmMethodSignature;
 import org.jetbrains.jet.codegen.state.JetTypeMapper;
-import org.jetbrains.jet.codegen.state.JetTypeMapperMode;
 import org.jetbrains.jet.lang.descriptors.*;
 import org.jetbrains.jet.lang.descriptors.annotations.AnnotationDescriptor;
-import org.jetbrains.jet.lang.psi.*;
-import org.jetbrains.jet.lang.resolve.BindingContext;
+import org.jetbrains.jet.lang.psi.JetClassObject;
+import org.jetbrains.jet.lang.psi.JetClassOrObject;
+import org.jetbrains.jet.lang.psi.JetObjectDeclaration;
 import org.jetbrains.jet.lang.resolve.DescriptorUtils;
 import org.jetbrains.jet.lang.resolve.java.JvmAbi;
 import org.jetbrains.jet.lang.resolve.java.JvmClassName;
@@ -49,7 +49,7 @@ import org.jetbrains.jet.lang.types.lang.JetStandardLibrary;
 import java.util.*;
 
 import static org.jetbrains.asm4.Opcodes.*;
-import static org.jetbrains.jet.codegen.AsmTypeConstants.OBJECT_TYPE;
+import static org.jetbrains.jet.lang.resolve.java.AsmTypeConstants.OBJECT_TYPE;
 import static org.jetbrains.jet.lang.resolve.DescriptorUtils.isClassObject;
 
 /**
@@ -211,40 +211,17 @@ public class CodegenUtil {
         return closure.getCaptureThis() == null && closure.getCaptureReceiver() == null && closure.getCaptureVariables().isEmpty();
     }
 
-    public static JetDelegatorToSuperCall findSuperCall(JetElement classOrObject, BindingContext bindingContext) {
-        if (!(classOrObject instanceof JetClassOrObject)) {
-            return null;
-        }
-
-        if (classOrObject instanceof JetClass && ((JetClass) classOrObject).isTrait()) {
-            return null;
-        }
-        for (JetDelegationSpecifier specifier : ((JetClassOrObject) classOrObject).getDelegationSpecifiers()) {
-            if (specifier instanceof JetDelegatorToSuperCall) {
-                JetType superType = bindingContext.get(BindingContext.TYPE, specifier.getTypeReference());
-                assert superType != null;
-                ClassDescriptor superClassDescriptor = (ClassDescriptor) superType.getConstructor().getDeclarationDescriptor();
-                assert superClassDescriptor != null;
-                if (!isInterface(superClassDescriptor)) {
-                    return (JetDelegatorToSuperCall) specifier;
-                }
-            }
-        }
-
-        return null;
-    }
-
     public static void generateClosureFields(CalculatedClosure closure, ClassBuilder v, JetTypeMapper typeMapper) {
         final ClassifierDescriptor captureThis = closure.getCaptureThis();
         final int access = ACC_PUBLIC | ACC_SYNTHETIC | ACC_FINAL;
         if (captureThis != null) {
-            v.newField(null, access, THIS$0, typeMapper.mapType(captureThis.getDefaultType(), JetTypeMapperMode.VALUE).getDescriptor(), null,
+            v.newField(null, access, THIS$0, typeMapper.mapType(captureThis).getDescriptor(), null,
                        null);
         }
 
         final ClassifierDescriptor captureReceiver = closure.getCaptureReceiver();
         if (captureReceiver != null) {
-            v.newField(null, access, RECEIVER$0, typeMapper.mapType(captureReceiver.getDefaultType(), JetTypeMapperMode.VALUE).getDescriptor(),
+            v.newField(null, access, RECEIVER$0, typeMapper.mapType(captureReceiver).getDescriptor(),
                        null, null);
         }
 
@@ -377,5 +354,14 @@ public class CodegenUtil {
             member = (T) member.getOverriddenDescriptors().iterator().next();
         }
         return member;
+    }
+
+    public static void checkMustGenerateCode(CallableMemberDescriptor descriptor) {
+        if (descriptor.getKind() == CallableMemberDescriptor.Kind.FAKE_OVERRIDE) {
+            throw new IllegalStateException("must not generate code for fake overrides");
+        }
+        if (descriptor.getKind() == CallableMemberDescriptor.Kind.SYNTHESIZED) {
+            throw new IllegalStateException("code generation for synthesized members should be handled separately");
+        }
     }
 }

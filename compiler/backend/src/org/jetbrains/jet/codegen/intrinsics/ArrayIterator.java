@@ -20,7 +20,7 @@ import com.intellij.psi.PsiElement;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.asm4.Type;
 import org.jetbrains.asm4.commons.InstructionAdapter;
-import org.jetbrains.jet.codegen.AsmTypeConstants;
+import org.jetbrains.jet.lang.resolve.java.AsmTypeConstants;
 import org.jetbrains.jet.codegen.ExpressionCodegen;
 import org.jetbrains.jet.codegen.StackValue;
 import org.jetbrains.jet.codegen.state.GenerationState;
@@ -63,7 +63,8 @@ public class ArrayIterator implements IntrinsicMethod {
         else {
             for (JvmPrimitiveType jvmPrimitiveType : JvmPrimitiveType.values()) {
                 PrimitiveType primitiveType = jvmPrimitiveType.getPrimitiveType();
-                if (primitiveType.getArrayClassName().is(containingDeclaration)) {
+                ClassDescriptor arrayClass = JetStandardLibrary.getInstance().getPrimitiveArrayClassDescriptor(primitiveType);
+                if (containingDeclaration.equals(arrayClass)) {
                     String methodSignature = "([" + jvmPrimitiveType.getJvmLetter() + ")" + jvmPrimitiveType.getIterator().getDescriptor();
                     v.invokestatic("jet/runtime/ArrayIterator", "iterator", methodSignature);
                     return StackValue.onStack(jvmPrimitiveType.getIterator().getAsmType());

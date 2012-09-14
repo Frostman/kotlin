@@ -80,6 +80,23 @@ class MapTest {
         assertEquals("beverage,beer,location,Mells,name,James", list.makeString(","))
     }
 
+    test fun iterateWithExtraction() {
+        val map = TreeMap<String, String>()
+        map["beverage"] = "beer"
+        map["location"] = "Mells"
+        map["name"] = "James"
+
+        val list = arrayList<String>()
+        for ((key, value) in map) {
+            println("key = ${key}, value = ${value}")
+            list.add(key)
+            list.add(value)
+        }
+
+        assertEquals(6, list.size())
+        assertEquals("beverage,beer,location,Mells,name,James", list.makeString(","))
+    }
+
     test fun map() {
         val m1 = TreeMap<String, String>()
         m1["beverage"] = "beer"
@@ -103,7 +120,7 @@ class MapTest {
     }
 
     test fun createUsingTuples() {
-        val map = hashMap(#("a", 1), #("b", 2))
+        val map = hashMap(Pair("a", 1), Pair("b", 2))
         assertEquals(2, map.size)
         assertEquals(1, map.get("a"))
         assertEquals(2, map.get("b"))
@@ -117,7 +134,7 @@ class MapTest {
     }
 
     test fun createLinkedMap() {
-        val map = linkedMap(#("c", 3), #("b", 2), #("a", 1))
+        val map = linkedMap(Pair("c", 3), Pair("b", 2), Pair("a", 1))
         assertEquals(1, map.get("a"))
         assertEquals(2, map.get("b"))
         assertEquals(3, map.get("c"))
@@ -125,7 +142,7 @@ class MapTest {
     }
 
     test fun createSortedMap() {
-        val map = sortedMap(#("c", 3), #("b", 2), #("a", 1))
+        val map = sortedMap(Pair("c", 3), Pair("b", 2), Pair("a", 1))
         assertEquals(1, map.get("a"))
         assertEquals(2, map.get("b"))
         assertEquals(3, map.get("c"))
@@ -133,7 +150,7 @@ class MapTest {
     }
 
     test fun toSortedMap() {
-        val map = hashMap<String,Int>(#("c", 3), #("b", 2), #("a", 1))
+        val map = hashMap<String,Int>(Pair("c", 3), Pair("b", 2), Pair("a", 1))
         val sorted = map.toSortedMap<String,Int>()
         assertEquals(1, sorted.get("a"))
         assertEquals(2, sorted.get("b"))
@@ -142,7 +159,7 @@ class MapTest {
     }
 
     test fun toSortedMapWithComparator() {
-        val map = hashMap(#("c", 3), #("bc", 2), #("bd", 4), #("abc", 1))
+        val map = hashMap(Pair("c", 3), Pair("bc", 2), Pair("bd", 4), Pair("abc", 1))
         val c = comparator<String>{ a, b ->
             val answer = a.length() - b.length()
             if (answer == 0) a.compareTo(b) else answer

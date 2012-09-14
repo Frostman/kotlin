@@ -41,10 +41,10 @@ public class MutableClassDescriptor extends MutableClassDescriptorLite implement
     private final Set<ConstructorDescriptor> constructors = Sets.newLinkedHashSet();
     private ConstructorDescriptor primaryConstructor;
 
-    private final Set<CallableMemberDescriptor> declaredCallableMembers = Sets.newHashSet();
-    private final Set<CallableMemberDescriptor> allCallableMembers = Sets.newHashSet(); // includes fake overrides
-    private final Set<PropertyDescriptor> properties = Sets.newHashSet();
-    private final Set<SimpleFunctionDescriptor> functions = Sets.newHashSet();
+    private final Set<CallableMemberDescriptor> declaredCallableMembers = Sets.newLinkedHashSet();
+    private final Set<CallableMemberDescriptor> allCallableMembers = Sets.newLinkedHashSet(); // includes fake overrides
+    private final Set<PropertyDescriptor> properties = Sets.newLinkedHashSet();
+    private final Set<SimpleFunctionDescriptor> functions = Sets.newLinkedHashSet();
 
     private final WritableScope scopeForMemberResolution;
     // This scope contains type parameters but does not contain inner classes
@@ -222,7 +222,7 @@ public class MutableClassDescriptor extends MutableClassDescriptorLite implement
                 public void addFunctionDescriptor(@NotNull SimpleFunctionDescriptor functionDescriptor) {
                     superBuilder.addFunctionDescriptor(functionDescriptor);
                     functions.add(functionDescriptor);
-                    if (functionDescriptor.getKind() != CallableMemberDescriptor.Kind.FAKE_OVERRIDE) {
+                    if (functionDescriptor.getKind().isReal()) {
                         declaredCallableMembers.add(functionDescriptor);
                     }
                     allCallableMembers.add(functionDescriptor);
@@ -260,7 +260,7 @@ public class MutableClassDescriptor extends MutableClassDescriptorLite implement
                 public void addPropertyDescriptor(@NotNull PropertyDescriptor propertyDescriptor) {
                     superBuilder.addPropertyDescriptor(propertyDescriptor);
                     properties.add(propertyDescriptor);
-                    if (propertyDescriptor.getKind() != CallableMemberDescriptor.Kind.FAKE_OVERRIDE) {
+                    if (propertyDescriptor.getKind().isReal()) {
                         declaredCallableMembers.add(propertyDescriptor);
                     }
                     allCallableMembers.add(propertyDescriptor);

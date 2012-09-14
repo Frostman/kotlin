@@ -17,11 +17,12 @@
 package org.jetbrains.jet.plugin.libraries;
 
 import com.intellij.lang.Language;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileTypes.ContentBasedClassFileProcessor;
 import com.intellij.openapi.fileTypes.SyntaxHighlighter;
+import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.psi.PsiFile;
 import com.intellij.psi.impl.compiled.ClsFileImpl;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -34,8 +35,24 @@ import org.jetbrains.jet.plugin.highlighter.JetHighlighter;
 public class JetContentBasedFileSubstitutor implements ContentBasedClassFileProcessor {
 
     @Override
-    public boolean isApplicable(@Nullable Project project, @NotNull VirtualFile file) {
-        return project != null && JetDecompiledData.isKotlinFile(project, file);
+    public boolean isApplicable(@Nullable Project project, @NotNull final VirtualFile file) {
+        if (project == null) {
+            return false;
+        }
+
+        if (DumbService.isDumb(project)) {
+            DumbService.getInstance(project).runWhenSmart(new Runnable() {
+                @Override
+                public void run() {
+                    FileDocumentManager docManager = FileDocumentManager.getInstance();
+                    docManager.getDocument(file); // force getting document because it can be collected
+                    docManager.reloadFiles(file);
+                }
+            });
+            return false;
+        }
+
+        return JetDecompiledData.isKotlinFile(project, file);
     }
 
     @NotNull

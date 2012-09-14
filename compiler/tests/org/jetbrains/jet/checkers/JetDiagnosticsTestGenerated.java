@@ -30,7 +30,7 @@ import org.jetbrains.jet.checkers.AbstractDiagnosticsTestWithEagerResolve;
 @InnerTestClasses({JetDiagnosticsTestGenerated.Tests.class, JetDiagnosticsTestGenerated.Script.class})
 public class JetDiagnosticsTestGenerated extends AbstractDiagnosticsTestWithEagerResolve {
     @TestMetadata("compiler/testData/diagnostics/tests")
-    @InnerTestClasses({Tests.Annotations.class, Tests.BackingField.class, Tests.Cast.class, Tests.CheckArguments.class, Tests.ControlFlowAnalysis.class, Tests.ControlStructures.class, Tests.DataFlow.class, Tests.DataFlowInfoTraversal.class, Tests.DeclarationChecks.class, Tests.Enum.class, Tests.Extensions.class, Tests.Generics.class, Tests.IncompleteCode.class, Tests.Inference.class, Tests.Infos.class, Tests.J_k.class, Tests.Jdk_annotations.class, Tests.Library.class, Tests.NullabilityAndAutoCasts.class, Tests.Objects.class, Tests.OperatorsOverloading.class, Tests.Overload.class, Tests.Override.class, Tests.Redeclarations.class, Tests.Regressions.class, Tests.Scopes.class, Tests.Shadowing.class, Tests.Substitutions.class, Tests.Subtyping.class, Tests.Tuples.class, Tests.Varargs.class})
+    @InnerTestClasses({Tests.Annotations.class, Tests.BackingField.class, Tests.Cast.class, Tests.CheckArguments.class, Tests.ControlFlowAnalysis.class, Tests.ControlStructures.class, Tests.DataClasses.class, Tests.DataFlow.class, Tests.DataFlowInfoTraversal.class, Tests.DeclarationChecks.class, Tests.Enum.class, Tests.Extensions.class, Tests.Generics.class, Tests.IncompleteCode.class, Tests.Inference.class, Tests.Infos.class, Tests.J_k.class, Tests.Jdk_annotations.class, Tests.Library.class, Tests.NullabilityAndAutoCasts.class, Tests.Objects.class, Tests.OperatorsOverloading.class, Tests.Overload.class, Tests.Override.class, Tests.Redeclarations.class, Tests.Regressions.class, Tests.Scopes.class, Tests.Shadowing.class, Tests.Substitutions.class, Tests.Subtyping.class, Tests.Tuples.class, Tests.Varargs.class})
     public static class Tests extends AbstractDiagnosticsTestWithEagerResolve {
         @TestMetadata("Abstract.kt")
         public void testAbstract() throws Exception {
@@ -185,20 +185,15 @@ public class JetDiagnosticsTestGenerated extends AbstractDiagnosticsTestWithEage
         public void testDelegationNotTotrait() throws Exception {
             doTest("compiler/testData/diagnostics/tests/DelegationNotTotrait.kt");
         }
-
-        @TestMetadata("Delegation_MultipleDelegates.kt")
-        public void testMultipleDelegation() throws Exception {
-            doTest("compiler/testData/diagnostics/tests/Delegation_MultipleDelegates.kt");
-        }
-
-        @TestMetadata("Delegation_Hierarchy.kt")
-        public void testHierarchyDelegation() throws Exception {
-            doTest("compiler/testData/diagnostics/tests/Delegation_Hierarchy.kt");
-        }
-
+        
         @TestMetadata("DelegationToJavaIface.kt")
         public void testDelegationToJavaIface() throws Exception {
             doTest("compiler/testData/diagnostics/tests/DelegationToJavaIface.kt");
+        }
+        
+        @TestMetadata("Delegation_Hierarchy.kt")
+        public void testDelegation_Hierarchy() throws Exception {
+            doTest("compiler/testData/diagnostics/tests/Delegation_Hierarchy.kt");
         }
         
         @TestMetadata("Delegation_MultipleDelegates.kt")
@@ -426,6 +421,11 @@ public class JetDiagnosticsTestGenerated extends AbstractDiagnosticsTestWithEage
             doTest("compiler/testData/diagnostics/tests/SafeCallNonNullReceiverReturnNull.kt");
         }
         
+        @TestMetadata("SafeCallOnFakeNamespace.kt")
+        public void testSafeCallOnFakeNamespace() throws Exception {
+            doTest("compiler/testData/diagnostics/tests/SafeCallOnFakeNamespace.kt");
+        }
+        
         @TestMetadata("ShiftFunctionTypes.kt")
         public void testShiftFunctionTypes() throws Exception {
             doTest("compiler/testData/diagnostics/tests/ShiftFunctionTypes.kt");
@@ -570,6 +570,11 @@ public class JetDiagnosticsTestGenerated extends AbstractDiagnosticsTestWithEage
             @TestMetadata("kt1860-positive.kt")
             public void testKt1860_positive() throws Exception {
                 doTest("compiler/testData/diagnostics/tests/annotations/kt1860-positive.kt");
+            }
+            
+            @TestMetadata("kt1886annotationBody.kt")
+            public void testKt1886annotationBody() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/annotations/kt1886annotationBody.kt");
             }
             
             @TestMetadata("NonAnnotationClass.kt")
@@ -950,6 +955,119 @@ public class JetDiagnosticsTestGenerated extends AbstractDiagnosticsTestWithEage
             @TestMetadata("when.kt234.kt973.kt")
             public void testWhen_kt234_kt973() throws Exception {
                 doTest("compiler/testData/diagnostics/tests/controlStructures/when.kt234.kt973.kt");
+            }
+            
+        }
+        
+        @TestMetadata("compiler/testData/diagnostics/tests/dataClasses")
+        public static class DataClasses extends AbstractDiagnosticsTestWithEagerResolve {
+            public void testAllFilesPresentInDataClasses() throws Exception {
+                JetTestUtils.assertAllTestsPresentByMetadata(this.getClass(), "org.jetbrains.jet.checkers.AbstractDiagnosticsTestWithEagerResolve", new File("compiler/testData/diagnostics/tests/dataClasses"), "kt", true);
+            }
+            
+            @TestMetadata("bothParamsAreNotProperties.kt")
+            public void testBothParamsAreNotProperties() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/bothParamsAreNotProperties.kt");
+            }
+            
+            @TestMetadata("componentFunctionInSubClass.kt")
+            public void testComponentFunctionInSubClass() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/componentFunctionInSubClass.kt");
+            }
+            
+            @TestMetadata("componentFunctionVisibility.kt")
+            public void testComponentFunctionVisibility() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/componentFunctionVisibility.kt");
+            }
+            
+            @TestMetadata("componentFunctionsAreFinal.kt")
+            public void testComponentFunctionsAreFinal() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/componentFunctionsAreFinal.kt");
+            }
+            
+            @TestMetadata("componentNamedComponent1.kt")
+            public void testComponentNamedComponent1() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/componentNamedComponent1.kt");
+            }
+            
+            @TestMetadata("conflictingOverloads.kt")
+            public void testConflictingOverloads() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/conflictingOverloads.kt");
+            }
+            
+            @TestMetadata("dataClassOverrideConflict.kt")
+            public void testDataClassOverrideConflict() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/dataClassOverrideConflict.kt");
+            }
+            
+            @TestMetadata("emptyConstructor.kt")
+            public void testEmptyConstructor() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/emptyConstructor.kt");
+            }
+            
+            @TestMetadata("firstParamIsVal.kt")
+            public void testFirstParamIsVal() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/firstParamIsVal.kt");
+            }
+            
+            @TestMetadata("firstParamIsVar.kt")
+            public void testFirstParamIsVar() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/firstParamIsVar.kt");
+            }
+            
+            @TestMetadata("implementTraitWhichHasComponent1.kt")
+            public void testImplementTraitWhichHasComponent1() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/implementTraitWhichHasComponent1.kt");
+            }
+            
+            @TestMetadata("implementTraitWhichHasFinalComponent1.kt")
+            public void testImplementTraitWhichHasFinalComponent1() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/implementTraitWhichHasFinalComponent1.kt");
+            }
+            
+            @TestMetadata("multiDeclaration.kt")
+            public void testMultiDeclaration() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/multiDeclaration.kt");
+            }
+            
+            @TestMetadata("multiDeclarationFor.kt")
+            public void testMultiDeclarationFor() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/multiDeclarationFor.kt");
+            }
+            
+            @TestMetadata("notADataClass.kt")
+            public void testNotADataClass() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/notADataClass.kt");
+            }
+            
+            @TestMetadata("oneValParam.kt")
+            public void testOneValParam() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/oneValParam.kt");
+            }
+            
+            @TestMetadata("overrideInvisibleMember.kt")
+            public void testOverrideInvisibleMember() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/overrideInvisibleMember.kt");
+            }
+            
+            @TestMetadata("secondParamIsVal.kt")
+            public void testSecondParamIsVal() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/secondParamIsVal.kt");
+            }
+            
+            @TestMetadata("secondParamIsVar.kt")
+            public void testSecondParamIsVar() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/secondParamIsVar.kt");
+            }
+            
+            @TestMetadata("twoValParams.kt")
+            public void testTwoValParams() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/twoValParams.kt");
+            }
+            
+            @TestMetadata("twoVarParams.kt")
+            public void testTwoVarParams() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/dataClasses/twoVarParams.kt");
             }
             
         }
@@ -1476,7 +1594,7 @@ public class JetDiagnosticsTestGenerated extends AbstractDiagnosticsTestWithEage
         }
         
         @TestMetadata("compiler/testData/diagnostics/tests/inference")
-        @InnerTestClasses({Inference.Regressions.class})
+        @InnerTestClasses({Inference.Regressions.class, Inference.Varargs.class})
         public static class Inference extends AbstractDiagnosticsTestWithEagerResolve {
             public void testAllFilesPresentInInference() throws Exception {
                 JetTestUtils.assertAllTestsPresentByMetadata(this.getClass(), "org.jetbrains.jet.checkers.AbstractDiagnosticsTestWithEagerResolve", new File("compiler/testData/diagnostics/tests/inference"), "kt", true);
@@ -1720,10 +1838,24 @@ public class JetDiagnosticsTestGenerated extends AbstractDiagnosticsTestWithEage
                 
             }
             
+            @TestMetadata("compiler/testData/diagnostics/tests/inference/varargs")
+            public static class Varargs extends AbstractDiagnosticsTestWithEagerResolve {
+                public void testAllFilesPresentInVarargs() throws Exception {
+                    JetTestUtils.assertAllTestsPresentByMetadata(this.getClass(), "org.jetbrains.jet.checkers.AbstractDiagnosticsTestWithEagerResolve", new File("compiler/testData/diagnostics/tests/inference/varargs"), "kt", true);
+                }
+                
+                @TestMetadata("varargsAndPair.kt")
+                public void testVarargsAndPair() throws Exception {
+                    doTest("compiler/testData/diagnostics/tests/inference/varargs/varargsAndPair.kt");
+                }
+                
+            }
+            
             public static Test innerSuite() {
                 TestSuite suite = new TestSuite("Inference");
                 suite.addTestSuite(Inference.class);
                 suite.addTestSuite(Regressions.class);
+                suite.addTestSuite(Varargs.class);
                 return suite;
             }
         }
@@ -2256,6 +2388,11 @@ public class JetDiagnosticsTestGenerated extends AbstractDiagnosticsTestWithEage
             @TestMetadata("NonGenerics.kt")
             public void testNonGenerics() throws Exception {
                 doTest("compiler/testData/diagnostics/tests/override/NonGenerics.kt");
+            }
+            
+            @TestMetadata("OverridingFinalMember.kt")
+            public void testOverridingFinalMember() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/override/OverridingFinalMember.kt");
             }
             
             @TestMetadata("ParameterDefaultValues-DefaultValueFromOnlyOneSupertype.kt")
@@ -3083,6 +3220,16 @@ public class JetDiagnosticsTestGenerated extends AbstractDiagnosticsTestWithEage
                 doTest("compiler/testData/diagnostics/tests/substitutions/kt1558-short.kt");
             }
             
+            @TestMetadata("upperBoundsSubstitutionForOverloadResolutionWithAmbiguity.kt")
+            public void testUpperBoundsSubstitutionForOverloadResolutionWithAmbiguity() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/substitutions/upperBoundsSubstitutionForOverloadResolutionWithAmbiguity.kt");
+            }
+            
+            @TestMetadata("upperBoundsSubstitutionForOverloadResolutionWithErrorTypes.kt")
+            public void testUpperBoundsSubstitutionForOverloadResolutionWithErrorTypes() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/substitutions/upperBoundsSubstitutionForOverloadResolutionWithErrorTypes.kt");
+            }
+            
         }
         
         @TestMetadata("compiler/testData/diagnostics/tests/subtyping")
@@ -3094,6 +3241,11 @@ public class JetDiagnosticsTestGenerated extends AbstractDiagnosticsTestWithEage
             @TestMetadata("kt2069.kt")
             public void testKt2069() throws Exception {
                 doTest("compiler/testData/diagnostics/tests/subtyping/kt2069.kt");
+            }
+            
+            @TestMetadata("kt2744.kt")
+            public void testKt2744() throws Exception {
+                doTest("compiler/testData/diagnostics/tests/subtyping/kt2744.kt");
             }
             
             @TestMetadata("kt304.kt")
@@ -3183,6 +3335,7 @@ public class JetDiagnosticsTestGenerated extends AbstractDiagnosticsTestWithEage
             suite.addTestSuite(CheckArguments.class);
             suite.addTestSuite(ControlFlowAnalysis.class);
             suite.addTestSuite(ControlStructures.class);
+            suite.addTestSuite(DataClasses.class);
             suite.addTestSuite(DataFlow.class);
             suite.addTestSuite(DataFlowInfoTraversal.class);
             suite.addTest(DeclarationChecks.innerSuite());

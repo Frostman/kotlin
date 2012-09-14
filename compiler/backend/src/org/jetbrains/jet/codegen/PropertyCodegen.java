@@ -27,7 +27,6 @@ import org.jetbrains.jet.codegen.context.CodegenContext;
 import org.jetbrains.jet.codegen.signature.JvmPropertyAccessorSignature;
 import org.jetbrains.jet.codegen.signature.kotlin.JetMethodAnnotationWriter;
 import org.jetbrains.jet.codegen.state.GenerationStateAware;
-import org.jetbrains.jet.codegen.state.JetTypeMapperMode;
 import org.jetbrains.jet.lang.descriptors.*;
 import org.jetbrains.jet.lang.psi.*;
 import org.jetbrains.jet.lang.resolve.BindingContext;
@@ -35,13 +34,14 @@ import org.jetbrains.jet.lang.resolve.DescriptorUtils;
 import org.jetbrains.jet.lang.resolve.constants.CompileTimeConstant;
 import org.jetbrains.jet.lang.resolve.java.JvmAbi;
 import org.jetbrains.jet.lang.resolve.java.JvmStdlibNames;
+import org.jetbrains.jet.lang.resolve.java.kt.DescriptorKindUtils;
 import org.jetbrains.jet.lang.resolve.name.Name;
 import org.jetbrains.jet.lang.types.lang.JetStandardLibrary;
 
 import java.util.BitSet;
 
 import static org.jetbrains.asm4.Opcodes.*;
-import static org.jetbrains.jet.codegen.AsmTypeConstants.OBJECT_TYPE;
+import static org.jetbrains.jet.lang.resolve.java.AsmTypeConstants.OBJECT_TYPE;
 import static org.jetbrains.jet.codegen.CodegenUtil.*;
 import static org.jetbrains.jet.lang.resolve.BindingContextUtils.descriptorToDeclaration;
 
@@ -111,7 +111,7 @@ public class PropertyCodegen extends GenerationStateAware {
             if (JetStandardLibrary.getInstance().isVolatile(propertyDescriptor)) {
                 modifiers |= ACC_VOLATILE;
             }
-            Type type = state.getTypeMapper().mapType(propertyDescriptor.getType(), JetTypeMapperMode.VALUE);
+            Type type = state.getTypeMapper().mapType(propertyDescriptor);
             FieldVisitor fieldVisitor = v.newField(p, modifiers, propertyDescriptor.getName().getName(), type.getDescriptor(), null, value);
             AnnotationCodegen.forField(fieldVisitor, state.getTypeMapper()).genAnnotations(propertyDescriptor);
         }
@@ -171,9 +171,7 @@ public class PropertyCodegen extends GenerationStateAware {
     }
 
     public void generateDefaultGetter(PropertyDescriptor propertyDescriptor, int flags, PsiElement origin) {
-        if (propertyDescriptor.getKind() == CallableMemberDescriptor.Kind.FAKE_OVERRIDE) {
-            throw new IllegalStateException("must not generate code for fake overrides");
-        }
+        checkMustGenerateCode(propertyDescriptor);
 
         if (kind == OwnerKind.TRAIT_IMPL) {
             return;
@@ -221,7 +219,7 @@ public class PropertyCodegen extends GenerationStateAware {
                     if (kind != OwnerKind.NAMESPACE) {
                         iv.load(0, OBJECT_TYPE);
                     }
-                    final Type type = state.getTypeMapper().mapType(propertyDescriptor.getType(), JetTypeMapperMode.VALUE);
+                    final Type type = state.getTypeMapper().mapType(propertyDescriptor);
 
                     if ((kind instanceof OwnerKind.DelegateKind) != (propertyDescriptor.getKind() == FunctionDescriptor.Kind.DELEGATION)) {
                         throw new IllegalStateException("mismatching kind in " + propertyDescriptor);
@@ -260,6 +258,7 @@ public class PropertyCodegen extends GenerationStateAware {
                       : JvmStdlibNames.FLAG_FORCE_OPEN_BIT);
         }
         aw.writeFlags(flags);
+        aw.writeKind(DescriptorKindUtils.kindToInt(propertyDescriptor.getKind()));
         aw.writeTypeParameters(typeParameters);
         aw.writePropertyType(kotlinType);
         aw.visitEnd();
@@ -277,9 +276,7 @@ public class PropertyCodegen extends GenerationStateAware {
     }
 
     public void generateDefaultSetter(PropertyDescriptor propertyDescriptor, int flags, PsiElement origin) {
-        if (propertyDescriptor.getKind() == CallableMemberDescriptor.Kind.FAKE_OVERRIDE) {
-            throw new IllegalStateException("must not generate code for fake overrides");
-        }
+        checkMustGenerateCode(propertyDescriptor);
 
         if (kind == OwnerKind.TRAIT_IMPL) {
             return;
@@ -320,7 +317,7 @@ public class PropertyCodegen extends GenerationStateAware {
                 }
                 else {
                     InstructionAdapter iv = new InstructionAdapter(mv);
-                    final Type type = state.getTypeMapper().mapType(propertyDescriptor.getType(), JetTypeMapperMode.VALUE);
+                    final Type type = state.getTypeMapper().mapType(propertyDescriptor);
                     int paramCode = 0;
                     if (kind != OwnerKind.NAMESPACE) {
                         iv.load(0, OBJECT_TYPE);

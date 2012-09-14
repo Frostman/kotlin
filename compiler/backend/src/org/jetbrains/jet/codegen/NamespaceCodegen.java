@@ -18,6 +18,7 @@ package org.jetbrains.jet.codegen;
 
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.progress.ProcessCanceledException;
+import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiFile;
 import org.jetbrains.annotations.NotNull;
@@ -291,7 +292,7 @@ public class NamespaceCodegen extends GenerationStateAware {
 
     @NotNull
     public static String getMultiFileNamespaceInternalName(String namespaceInternalName, PsiFile file) {
-        String name = file.getName();
+        String name = FileUtil.toSystemDependentName(file.getName());
 
         int substringFrom = name.lastIndexOf(File.separator) + 1;
 
@@ -301,6 +302,7 @@ public class NamespaceCodegen extends GenerationStateAware {
         }
 
         // dollar sign in the end is to prevent synthetic class from having "Test" or other parseable suffix
-        return namespaceInternalName + "$src$" + name.substring(substringFrom, substringTo) + "$";
+        // path hashCode to prevent same name / different path collision
+        return namespaceInternalName + "$src$" + name.substring(substringFrom, substringTo) + "$" + file.getVirtualFile().getCanonicalPath().hashCode();
     }
 }

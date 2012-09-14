@@ -24,7 +24,6 @@ import org.jetbrains.jet.codegen.binding.CodegenBinding;
 import org.jetbrains.jet.codegen.binding.MutableClosure;
 import org.jetbrains.jet.codegen.state.GenerationState;
 import org.jetbrains.jet.codegen.state.JetTypeMapper;
-import org.jetbrains.jet.codegen.state.JetTypeMapperMode;
 import org.jetbrains.jet.lang.descriptors.*;
 import org.jetbrains.jet.lang.descriptors.annotations.AnnotationDescriptor;
 
@@ -32,7 +31,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.jetbrains.jet.codegen.AsmTypeConstants.OBJECT_TYPE;
+import static org.jetbrains.jet.lang.resolve.java.AsmTypeConstants.OBJECT_TYPE;
 import static org.jetbrains.jet.codegen.binding.CodegenBinding.CLASS_FOR_FUNCTION;
 import static org.jetbrains.jet.codegen.binding.CodegenBinding.FQN;
 
@@ -106,8 +105,9 @@ public abstract class CodegenContext {
     /**
      * This method returns not null only if context descriptor corresponds to method or function which has receiver
      */
-    @Nullable public final CallableDescriptor getCallableDescriptorWithReceiver() {
-        if(contextDescriptor instanceof CallableDescriptor) {
+    @Nullable
+    public final CallableDescriptor getCallableDescriptorWithReceiver() {
+        if (contextDescriptor instanceof CallableDescriptor) {
             final CallableDescriptor callableDescriptor = (CallableDescriptor) getContextDescriptor();
             return callableDescriptor.getReceiverParameter().exists() ? callableDescriptor : null;
         }
@@ -195,7 +195,7 @@ public abstract class CodegenContext {
 
         CallableDescriptor receiverDescriptor = getCallableDescriptorWithReceiver();
         if (receiverDescriptor != null) {
-            Type type = mapper.mapType(receiverDescriptor.getReceiverParameter().getType(), JetTypeMapperMode.VALUE);
+            Type type = mapper.mapType(receiverDescriptor.getReceiverParameter().getType());
             frameMap.enterTemp(type);  // Next slot for receiver
         }
 
@@ -226,14 +226,14 @@ public abstract class CodegenContext {
             return accessor;
         }
 
-        if (descriptor instanceof SimpleFunctionDescriptor) {
+        if (descriptor instanceof SimpleFunctionDescriptor || descriptor instanceof ConstructorDescriptor) {
             accessor = new AccessorForFunctionDescriptor(descriptor, contextDescriptor, accessors.size());
         }
         else if (descriptor instanceof PropertyDescriptor) {
             accessor = new AccessorForPropertyDescriptor((PropertyDescriptor) descriptor, contextDescriptor, accessors.size());
         }
         else {
-            throw new UnsupportedOperationException();
+            throw new UnsupportedOperationException("Do not know how to create accessor for descriptor " + descriptor);
         }
         accessors.put(descriptor, accessor);
         return accessor;
@@ -242,7 +242,7 @@ public abstract class CodegenContext {
     public StackValue getReceiverExpression(JetTypeMapper typeMapper) {
         assert getCallableDescriptorWithReceiver() != null;
         @SuppressWarnings("ConstantConditions")
-        Type asmType = typeMapper.mapType(getCallableDescriptorWithReceiver().getReceiverParameter().getType(), JetTypeMapperMode.VALUE);
+        Type asmType = typeMapper.mapType(getCallableDescriptorWithReceiver().getReceiverParameter().getType());
         return hasThisDescriptor() ? StackValue.local(1, asmType) : StackValue.local(0, asmType);
     }
 
@@ -261,8 +261,7 @@ public abstract class CodegenContext {
         final ClassDescriptor enclosingClass = getEnclosingClass();
         outerExpression = enclosingClass != null
                           ? StackValue
-                .field(typeMapper.mapType(enclosingClass.getDefaultType(), JetTypeMapperMode.VALUE), CodegenBinding.getJvmClassName(
-                        typeMapper.getBindingTrace(), classDescriptor), CodegenUtil.THIS$0,
+                .field(typeMapper.mapType(enclosingClass), CodegenBinding.getJvmInternalName(typeMapper.getBindingTrace(), classDescriptor), CodegenUtil.THIS$0,
                        false)
                           : null;
     }
@@ -289,7 +288,7 @@ public abstract class CodegenContext {
             }
 
             StackValue outer = getOuterExpression(null, ignoreNoOuter);
-            result = result == null ? outer : StackValue.composed(result, outer);
+            result = result == null || outer == null ? outer : StackValue.composed(result, outer);
         }
 
         return parentContext != null ? parentContext.lookupInContext(d, result, state, ignoreNoOuter) : null;

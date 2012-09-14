@@ -84,7 +84,7 @@ public interface Errors {
     DiagnosticFactory1<JetSimpleNameExpression, DeclarationDescriptor> CANNOT_BE_IMPORTED = DiagnosticFactory1.create(ERROR);
     SimpleDiagnosticFactory<JetExpression> USELESS_HIDDEN_IMPORT = SimpleDiagnosticFactory.create(WARNING);
     SimpleDiagnosticFactory<JetExpression> USELESS_SIMPLE_IMPORT = SimpleDiagnosticFactory.create(WARNING);
-    DiagnosticFactory1<JetElement, Collection<ClassDescriptor>> CLASS_HAS_KOTLIN_ANALOG = DiagnosticFactory1.create(WARNING);
+    DiagnosticFactory1<JetElement, Collection<ClassDescriptor>> PLATFORM_CLASS_MAPPED_TO_KOTLIN = DiagnosticFactory1.create(WARNING);
 
     SimpleDiagnosticFactory<JetParameter> CANNOT_INFER_PARAMETER_TYPE = SimpleDiagnosticFactory.create(ERROR);
 
@@ -145,6 +145,8 @@ public interface Errors {
             DiagnosticFactory3.create(ERROR, NAMED_ELEMENT);
     DiagnosticFactory3<JetModifierListOwner, CallableMemberDescriptor, CallableDescriptor, DeclarationDescriptor> CANNOT_OVERRIDE_INVISIBLE_MEMBER =
             DiagnosticFactory3.create(ERROR, OVERRIDE_MODIFIER);
+    DiagnosticFactory2<JetAnnotationEntry, CallableMemberDescriptor, DeclarationDescriptor> DATA_CLASS_OVERRIDE_CONFLICT =
+            DiagnosticFactory2.create(ERROR);
     SimpleDiagnosticFactory<JetDeclaration> CANNOT_INFER_VISIBILITY = SimpleDiagnosticFactory.create(ERROR, DECLARATION);
 
     DiagnosticFactory1<JetClass, ClassDescriptor> ENUM_ENTRY_SHOULD_BE_INITIALIZED = DiagnosticFactory1.create(ERROR, NAME_IDENTIFIER);
@@ -358,7 +360,7 @@ public interface Errors {
     SimpleDiagnosticFactory<JetExpression> DANGLING_FUNCTION_LITERAL_ARGUMENT_SUSPECTED = SimpleDiagnosticFactory.create(WARNING);
 
     DiagnosticFactory1<JetAnnotationEntry, String> NOT_AN_ANNOTATION_CLASS = DiagnosticFactory1.create(ERROR);
-
+    SimpleDiagnosticFactory<PsiElement> ANNOTATION_CLASS_WITH_BODY = SimpleDiagnosticFactory.create(ERROR);
 
     // This field is needed to make the Initializer class load (interfaces cannot have static initializers)
     @SuppressWarnings("UnusedDeclaration")

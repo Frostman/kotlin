@@ -69,6 +69,7 @@ class CodegenAnnotatingVisitor extends JetVisitorVoid {
                                        : JetStandardClasses.getFunction(arity)).getDefaultType()), JetScope.EMPTY,
                 Collections.<ConstructorDescriptor>emptySet(), null);
 
+        assert PsiCodegenPredictor.checkPredictedClassNameForFun(bindingContext, funDescriptor, classDescriptor);
         bindingTrace.record(CLASS_FOR_FUNCTION, funDescriptor, classDescriptor);
         return classDescriptor;
     }
@@ -134,7 +135,9 @@ class CodegenAnnotatingVisitor extends JetVisitorVoid {
             super.visitEnumEntry(enumEntry);
         }
         else {
-            bindingTrace.record(FQN, descriptor, bindingTrace.get(FQN, peekFromStack(classStack)));
+            JvmClassName jvmClassName = bindingTrace.get(FQN, peekFromStack(classStack));
+            assert PsiCodegenPredictor.checkPredictedNameFromPsi(bindingTrace, descriptor, jvmClassName);
+            bindingTrace.record(FQN, descriptor, jvmClassName);
         }
     }
 
@@ -256,10 +259,10 @@ class CodegenAnnotatingVisitor extends JetVisitorVoid {
         else if (containingDeclaration instanceof NamespaceDescriptor) {
             String peek = peekFromStack(nameStack);
             if (peek.isEmpty()) {
-                peek = "namespace";
+                peek = JvmAbi.PACKAGE_CLASS;
             }
             else {
-                peek += "/namespace";
+                peek += "/" + JvmAbi.PACKAGE_CLASS;
             }
             nameStack.push(peek + '$' + function.getName());
             super.visitNamedFunction(function);
