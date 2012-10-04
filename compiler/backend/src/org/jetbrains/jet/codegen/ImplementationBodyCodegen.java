@@ -22,6 +22,7 @@ import com.intellij.openapi.util.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.asm4.AnnotationVisitor;
+import org.jetbrains.asm4.Label;
 import org.jetbrains.asm4.MethodVisitor;
 import org.jetbrains.asm4.Type;
 import org.jetbrains.asm4.commons.InstructionAdapter;
@@ -40,6 +41,7 @@ import org.jetbrains.jet.codegen.state.JetTypeMapperMode;
 import org.jetbrains.jet.lang.descriptors.*;
 import org.jetbrains.jet.lang.psi.*;
 import org.jetbrains.jet.lang.resolve.BindingContext;
+import org.jetbrains.jet.lang.resolve.DescriptorUtils;
 import org.jetbrains.jet.lang.resolve.OverridingUtil;
 import org.jetbrains.jet.lang.resolve.calls.ResolvedCall;
 import org.jetbrains.jet.lang.resolve.constants.CompileTimeConstant;
@@ -48,18 +50,21 @@ import org.jetbrains.jet.lang.resolve.java.JvmAbi;
 import org.jetbrains.jet.lang.resolve.java.JvmClassName;
 import org.jetbrains.jet.lang.resolve.java.JvmStdlibNames;
 import org.jetbrains.jet.lang.resolve.java.kt.DescriptorKindUtils;
+import org.jetbrains.jet.lang.resolve.name.Name;
 import org.jetbrains.jet.lang.types.JetType;
+import org.jetbrains.jet.lang.types.lang.JetStandardClasses;
 import org.jetbrains.jet.lang.types.lang.JetStandardLibrary;
 import org.jetbrains.jet.lexer.JetTokens;
-import org.jetbrains.jet.utils.BitSetUtils;
 
 import java.util.*;
 
 import static org.jetbrains.asm4.Opcodes.*;
-import static org.jetbrains.jet.lang.resolve.java.AsmTypeConstants.OBJECT_TYPE;
+import static org.jetbrains.jet.codegen.AsmUtil.*;
 import static org.jetbrains.jet.codegen.CodegenUtil.*;
 import static org.jetbrains.jet.codegen.binding.CodegenBinding.*;
 import static org.jetbrains.jet.lang.resolve.BindingContextUtils.callableDescriptorToDeclaration;
+import static org.jetbrains.jet.lang.resolve.java.AsmTypeConstants.JAVA_STRING_TYPE;
+import static org.jetbrains.jet.lang.resolve.java.AsmTypeConstants.OBJECT_TYPE;
 
 /**
  * @author max
@@ -69,12 +74,14 @@ import static org.jetbrains.jet.lang.resolve.BindingContextUtils.callableDescrip
 public class ImplementationBodyCodegen extends ClassBodyCodegen {
     private static final String VALUES = "$VALUES";
     private JetDelegationSpecifier superCall;
-    private String superClass;
+    private Type superClassAsmType;
     @Nullable // null means java/lang/Object
     private JetType superClassType;
+    private final Type classAsmType;
 
     public ImplementationBodyCodegen(JetClassOrObject aClass, CodegenContext context, ClassBuilder v, GenerationState state) {
         super(aClass, context, v, state);
+        classAsmType = typeMapper.mapType(descriptor.getDefaultType(), JetTypeMapperMode.IMPL);
     }
 
     @Override
@@ -117,8 +124,9 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
                 isFinal = true;
             }
         }
-        else if (myClass.getParent() instanceof JetClassObject) {
-            isStatic = true;
+        else {
+            isStatic = myClass.getParent() instanceof JetClassObject;
+            isFinal = true;
         }
 
         int access = 0;
@@ -161,57 +169,90 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
         );
         v.visitSource(myClass.getContainingFile().getName(), null);
 
-        writeInnerOuterClasses();
+        writeOuterClass();
+
+        writeInnerClasses();
 
         AnnotationCodegen.forClass(v.getVisitor(), typeMapper).genAnnotations(descriptor);
 
         writeClassSignatureIfNeeded(signature);
     }
 
-    private void writeInnerOuterClasses() {
+    private void writeOuterClass() {
         ClassDescriptor container = getContainingClassDescriptor(descriptor);
         if (container != null) {
             v.visitOuterClass(typeMapper.mapType(container.getDefaultType(), JetTypeMapperMode.IMPL).getInternalName(), null, null);
         }
+    }
 
-        for (DeclarationDescriptor declarationDescriptor : descriptor.getUnsubstitutedInnerClassesScope().getAllDescriptors()) {
-            assert declarationDescriptor instanceof ClassDescriptor;
-            ClassDescriptor innerClass = (ClassDescriptor) declarationDescriptor;
-            // TODO: proper access
-            int innerClassAccess = ACC_PUBLIC;
-            if (innerClass.getModality() == Modality.FINAL) {
-                innerClassAccess |= ACC_FINAL;
-            }
-            else if (innerClass.getModality() == Modality.ABSTRACT) {
-                innerClassAccess |= ACC_ABSTRACT;
-            }
+    private void writeInnerClasses() {
+        // Inner enums are moved by frontend to a class object of outer class, but we want them to be inner for the outer class itself
+        // (to avoid publicly visible names like A$ClassObject$$B), so they are handled specially in this method
 
-            if (innerClass.getKind() == ClassKind.TRAIT) {
-                innerClassAccess |= ACC_INTERFACE;
+        for (ClassDescriptor innerClass : DescriptorUtils.getInnerClasses(descriptor)) {
+            // If it's an inner enum inside a class object, don't write it
+            // (instead write it to inner classes of this class object's containing class)
+            if (!isEnumMovedToClassObject(innerClass)) {
+                writeInnerClass(innerClass, false);
             }
-
-            // TODO: cache internal names
-            String outerClassInernalName = typeMapper.mapType(descriptor.getDefaultType(), JetTypeMapperMode.IMPL).getInternalName();
-            String innerClassInternalName = typeMapper.mapType(innerClass.getDefaultType(), JetTypeMapperMode.IMPL).getInternalName();
-            v.visitInnerClass(innerClassInternalName, outerClassInernalName, innerClass.getName().getName(), innerClassAccess);
         }
 
-        if (descriptor.getClassObjectDescriptor() != null) {
+        ClassDescriptor classObjectDescriptor = descriptor.getClassObjectDescriptor();
+        if (classObjectDescriptor != null) {
+            // Process all enums here which were moved to our class object
+            for (ClassDescriptor innerClass : DescriptorUtils.getInnerClasses(classObjectDescriptor)) {
+                if (isEnumMovedToClassObject(innerClass)) {
+                    writeInnerClass(innerClass, true);
+                }
+            }
+
             int innerClassAccess = ACC_PUBLIC | ACC_FINAL | ACC_STATIC;
-            String outerClassInernalName = typeMapper.mapType(descriptor.getDefaultType(), JetTypeMapperMode.IMPL).getInternalName();
-            v.visitInnerClass(outerClassInernalName + JvmAbi.CLASS_OBJECT_SUFFIX, outerClassInernalName, JvmAbi.CLASS_OBJECT_CLASS_NAME,
+            v.visitInnerClass(classAsmType.getInternalName() + JvmAbi.CLASS_OBJECT_SUFFIX, classAsmType.getInternalName(),
+                              JvmAbi.CLASS_OBJECT_CLASS_NAME,
                               innerClassAccess);
         }
+    }
+
+    private void writeInnerClass(ClassDescriptor innerClass, boolean isStatic) {
+        // TODO: proper access
+        int innerClassAccess = ACC_PUBLIC;
+        if (innerClass.getModality() == Modality.FINAL) {
+            innerClassAccess |= ACC_FINAL;
+        }
+        else if (innerClass.getModality() == Modality.ABSTRACT) {
+            innerClassAccess |= ACC_ABSTRACT;
+        }
+
+        if (innerClass.getKind() == ClassKind.TRAIT) {
+            innerClassAccess |= ACC_INTERFACE;
+        }
+        else if (innerClass.getKind() == ClassKind.ENUM_CLASS) {
+            innerClassAccess |= ACC_ENUM;
+        }
+
+        if (isStatic) {
+            innerClassAccess |= ACC_STATIC;
+        }
+
+        // TODO: cache internal names
+        String outerClassInternalName = classAsmType.getInternalName();
+        String innerClassInternalName = typeMapper.mapType(innerClass.getDefaultType(), JetTypeMapperMode.IMPL).getInternalName();
+        v.visitInnerClass(innerClassInternalName, outerClassInternalName, innerClass.getName().getName(), innerClassAccess);
+    }
+
+    private boolean isEnumMovedToClassObject(ClassDescriptor innerClass) {
+        // Checks if this is enum, moved to class object by frontend
+
+        return Boolean.TRUE.equals(bindingContext.get(BindingContext.IS_ENUM_MOVED_TO_CLASS_OBJECT, innerClass));
     }
 
     private void writeClassSignatureIfNeeded(JvmClassSignature signature) {
         if (signature.getKotlinGenericSignature() != null || descriptor.getVisibility() != Visibilities.PUBLIC) {
             AnnotationVisitor annotationVisitor = v.newAnnotation(JvmStdlibNames.JET_CLASS.getDescriptor(), true);
             annotationVisitor.visit(JvmStdlibNames.JET_CLASS_SIGNATURE, signature.getKotlinGenericSignature());
-            BitSet flags = getFlagsForVisibility(descriptor.getVisibility());
-            int flagsValue = BitSetUtils.toInt(flags);
-            if (JvmStdlibNames.FLAGS_DEFAULT_VALUE != flagsValue) {
-                annotationVisitor.visit(JvmStdlibNames.JET_CLASS_FLAGS_FIELD, flagsValue);
+            int flags = getFlagsForVisibility(descriptor.getVisibility()) | getFlagsForClassKind(descriptor);
+            if (JvmStdlibNames.FLAGS_DEFAULT_VALUE != flags) {
+                annotationVisitor.visit(JvmStdlibNames.JET_FLAGS_FIELD, flags);
             }
             annotationVisitor.visitEnd();
         }
@@ -246,7 +287,7 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
         {   // superclass
             signatureVisitor.writeSuperclass();
             if (superClassType == null) {
-                signatureVisitor.writeClassBegin(superClass, false, false);
+                signatureVisitor.writeClassBegin(superClassAsmType.getInternalName(), false, false);
                 signatureVisitor.writeClassEnd();
             }
             else {
@@ -276,7 +317,7 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
 
         signatureVisitor.writeSupersEnd();
 
-        return new JvmClassSignature(jvmName(), superClass, superInterfaces, signatureVisitor.makeJavaString(),
+        return new JvmClassSignature(jvmName(), superClassAsmType.getInternalName(), superInterfaces, signatureVisitor.makeJavaString(),
                                      signatureVisitor.makeKotlinClassSignature());
     }
 
@@ -284,11 +325,11 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
         if (kind != OwnerKind.IMPLEMENTATION) {
             throw new IllegalStateException("must not call this method with kind " + kind);
         }
-        return typeMapper.mapType(descriptor.getDefaultType(), JetTypeMapperMode.IMPL).getInternalName();
+        return classAsmType.getInternalName();
     }
 
     protected void getSuperClass() {
-        superClass = "java/lang/Object";
+        superClassAsmType = AsmTypeConstants.OBJECT_TYPE;
         superClassType = null;
 
         List<JetDelegationSpecifier> delegationSpecifiers = myClass.getDelegationSpecifiers();
@@ -309,7 +350,7 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
                 assert superClassDescriptor != null;
                 if (!isInterface(superClassDescriptor)) {
                     superClassType = superType;
-                    superClass = typeMapper.mapType(superClassDescriptor.getDefaultType(), JetTypeMapperMode.IMPL).getInternalName();
+                    superClassAsmType = typeMapper.mapType(superClassDescriptor.getDefaultType(), JetTypeMapperMode.IMPL);
                     superCall = specifier;
                 }
             }
@@ -318,19 +359,18 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
         if (superClassType == null) {
             if (descriptor.getKind() == ClassKind.ENUM_CLASS) {
                 superClassType = JetStandardLibrary.getInstance().getEnumType(descriptor.getDefaultType());
-                superClass = typeMapper.mapType(superClassType).getInternalName();
+                superClassAsmType = typeMapper.mapType(superClassType);
             }
             if (descriptor.getKind() == ClassKind.ENUM_ENTRY) {
                 superClassType = descriptor.getTypeConstructor().getSupertypes().iterator().next();
-                superClass = typeMapper.mapType(superClassType).getInternalName();
+                superClassAsmType = typeMapper.mapType(superClassType);
             }
         }
     }
 
     @Override
     protected void generateSyntheticParts() {
-        generateFieldForObjectInstance();
-        generateFieldForClassObject();
+        generateFieldForSingleton();
 
         try {
             generatePrimaryConstructor();
@@ -351,9 +391,214 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
 
         generateEnumMethods();
 
+        generateFunctionsForDataClasses();
+
+        genClosureFields(context.closure, v, state.getTypeMapper());
+    }
+
+    private List<PropertyDescriptor> getDataProperties() {
+        ArrayList<PropertyDescriptor> result = Lists.newArrayList();
+        for (JetParameter parameter : getPrimaryConstructorParameters()) {
+            if (parameter.getValOrVarNode() == null) continue;
+
+            PropertyDescriptor propertyDescriptor = state.getBindingContext().get(BindingContext.PRIMARY_CONSTRUCTOR_PARAMETER, parameter);
+            assert propertyDescriptor != null;
+
+            result.add(propertyDescriptor);
+        }
+        return result;
+    }
+
+    private void generateFunctionsForDataClasses() {
+        if (!JetStandardLibrary.isData(descriptor)) return;
+
         generateComponentFunctionsForDataClasses();
 
-        generateClosureFields(context.closure, v, state.getTypeMapper());
+        List<PropertyDescriptor> properties = getDataProperties();
+        if (!properties.isEmpty()) {
+            generateDataClassToStringIfNeeded(properties);
+            generateDataClassHashCodeIfNeeded(properties);
+            generateDataClassEqualsIfNeeded(properties);
+        }
+    }
+
+    private void generateDataClassToStringIfNeeded(List<PropertyDescriptor> properties) {
+        ClassDescriptor stringClass = JetStandardLibrary.getInstance().getString();
+        if (getDeclaredFunctionByRawSignature(descriptor, Name.identifier("toString"), stringClass) == null) {
+            generateDataClassToStringMethod(properties);
+        }
+    }
+
+    private void generateDataClassHashCodeIfNeeded(List<PropertyDescriptor> properties) {
+        ClassDescriptor intClass = JetStandardLibrary.getInstance().getInt();
+        if (getDeclaredFunctionByRawSignature(descriptor, Name.identifier("hashCode"), intClass) == null) {
+            generateDataClassHashCodeMethod(properties);
+        }
+    }
+
+    private void generateDataClassEqualsIfNeeded(List<PropertyDescriptor> properties) {
+        ClassDescriptor booleanClass = JetStandardLibrary.getInstance().getBoolean();
+        ClassDescriptor anyClass = JetStandardClasses.getAny();
+        FunctionDescriptor equalsFunction = getDeclaredFunctionByRawSignature(descriptor, Name.identifier("equals"), booleanClass, anyClass);
+        if (equalsFunction == null) {
+            generateDataClassEqualsMethod(properties);
+        }
+    }
+
+    private void generateDataClassEqualsMethod(List<PropertyDescriptor> properties) {
+        final MethodVisitor mv = v.getVisitor().visitMethod(ACC_PUBLIC, "equals", "(Ljava/lang/Object;)Z", null, null);
+        final InstructionAdapter iv = new InstructionAdapter(mv);
+
+        mv.visitCode();
+        Label eq = new Label();
+        Label ne = new Label();
+
+        iv.load(0, OBJECT_TYPE);
+        iv.load(1, AsmTypeConstants.OBJECT_TYPE);
+        iv.ifacmpeq(eq);
+
+        iv.load(1, AsmTypeConstants.OBJECT_TYPE);
+        iv.instanceOf(classAsmType);
+        iv.ifeq(ne);
+
+        iv.load(1, AsmTypeConstants.OBJECT_TYPE);
+        iv.checkcast(classAsmType);
+        iv.store(2, AsmTypeConstants.OBJECT_TYPE);
+
+        for (PropertyDescriptor propertyDescriptor : properties) {
+            final JetType type = propertyDescriptor.getType();
+            final Type asmType = typeMapper.mapType(type);
+
+            genPropertyOnStack(iv, propertyDescriptor, 0);
+            genPropertyOnStack(iv, propertyDescriptor, 2);
+
+            if (asmType.getSort() == Type.ARRAY) {
+                final Type elementType = correctElementType(asmType);
+                if (elementType.getSort() == Type.OBJECT || elementType.getSort() == Type.ARRAY) {
+                    iv.invokestatic("java/util/Arrays", "equals", "([Ljava/lang/Object;[Ljava/lang/Object;)Z");
+                }
+                else {
+                    iv.invokestatic("java/util/Arrays", "equals", "([" + elementType.getDescriptor() + "[" + elementType.getDescriptor() + ")Z");
+                }
+            }
+            else {
+                final StackValue value =
+                        genEqualsForExpressionsOnStack(iv, JetTokens.EQEQ, asmType, asmType, type.isNullable(), type.isNullable());
+                value.put(Type.BOOLEAN_TYPE, iv);
+            }
+
+            iv.ifeq(ne);
+        }
+
+        iv.mark(eq);
+        iv.iconst(1);
+        iv.areturn(Type.INT_TYPE);
+
+        iv.mark(ne);
+        iv.iconst(0);
+        iv.areturn(Type.INT_TYPE);
+
+        FunctionCodegen.endVisit(mv, "equals", myClass);
+    }
+
+    private void generateDataClassHashCodeMethod(List<PropertyDescriptor> properties) {
+        final MethodVisitor mv = v.getVisitor().visitMethod(ACC_PUBLIC, "hashCode", "()I", null, null);
+        final InstructionAdapter iv = new InstructionAdapter(mv);
+
+        mv.visitCode();
+        boolean first = true;
+        for (PropertyDescriptor propertyDescriptor : properties) {
+            if (!first) {
+                iv.iconst(31);
+                iv.mul(Type.INT_TYPE);
+            }
+
+            genPropertyOnStack(iv, propertyDescriptor, 0);
+
+            Label ifNull = null;
+            if (propertyDescriptor.getType().isNullable()) {
+                ifNull = new Label();
+
+                iv.dup();
+                iv.ifnull(ifNull);
+            }
+
+            genHashCode(mv, iv, typeMapper.mapType(propertyDescriptor.getType()));
+
+            if (ifNull != null) {
+                Label end = new Label();
+                iv.goTo(end);
+                iv.mark(ifNull);
+                iv.pop();
+                iv.iconst(0);
+                iv.mark(end);
+            }
+
+            if (first) {
+                first = false;
+            }
+            else {
+                iv.add(Type.INT_TYPE);
+            }
+        }
+
+        mv.visitInsn(IRETURN);
+
+        FunctionCodegen.endVisit(mv, "hashCode", myClass);
+    }
+
+    private void generateDataClassToStringMethod(List<PropertyDescriptor> properties) {
+        final MethodVisitor mv = v.getVisitor().visitMethod(ACC_PUBLIC, "toString", "()Ljava/lang/String;", null, null);
+        final InstructionAdapter iv = new InstructionAdapter(mv);
+
+        mv.visitCode();
+        genStringBuilderConstructor(iv);
+
+        boolean first = true;
+        for (PropertyDescriptor propertyDescriptor : properties) {
+            if (first) {
+                iv.aconst(descriptor.getName() + "(" + propertyDescriptor.getName().getName()+"=");
+                first = false;
+            }
+            else {
+                iv.aconst(", " + propertyDescriptor.getName().getName()+"=");
+            }
+            genInvokeAppendMethod(iv, JAVA_STRING_TYPE);
+
+            Type type = genPropertyOnStack(iv, propertyDescriptor, 0);
+
+            if (type.getSort() == Type.ARRAY) {
+                final Type elementType = correctElementType(type);
+                if (elementType.getSort() == Type.OBJECT || elementType.getSort() == Type.ARRAY) {
+                    iv.invokestatic("java/util/Arrays", "toString", "([Ljava/lang/Object;)Ljava/lang/String;");
+                    type = JAVA_STRING_TYPE;
+                }
+                else {
+                    if (elementType.getSort() != Type.CHAR) {
+                        iv.invokestatic("java/util/Arrays", "toString", "(" + type.getDescriptor() + ")Ljava/lang/String;");
+                        type = JAVA_STRING_TYPE;
+                    }
+                }
+            }
+            genInvokeAppendMethod(iv, type);
+        }
+
+        iv.aconst(")");
+        genInvokeAppendMethod(iv, JAVA_STRING_TYPE);
+
+        iv.invokevirtual("java/lang/StringBuilder", "toString", "()Ljava/lang/String;");
+        iv.areturn(JAVA_STRING_TYPE);
+
+        FunctionCodegen.endVisit(mv, "toString", myClass);
+    }
+
+    private Type genPropertyOnStack(InstructionAdapter iv, PropertyDescriptor propertyDescriptor, int index) {
+        iv.load(index, classAsmType);
+        final Method
+                method = typeMapper.mapGetterSignature(propertyDescriptor, OwnerKind.IMPLEMENTATION).getJvmMethodSignature().getAsmMethod();
+
+        iv.invokevirtual(classAsmType.getInternalName(), method.getName(), method.getDescriptor());
+        return method.getReturnType();
     }
 
     private void generateComponentFunctionsForDataClasses() {
@@ -374,27 +619,20 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
         assert returnType != null : "Return type of component function should not be null: " + function;
         Type componentType = typeMapper.mapReturnType(returnType);
 
+        final String desc = "()" + componentType.getDescriptor();
         MethodVisitor mv = v.newMethod(myClass,
-                                       ACC_FINAL | getVisibilityAccessFlag(function),
+                                       FunctionCodegen.getMethodAsmFlags(function, OwnerKind.IMPLEMENTATION),
                                        function.getName().getName(),
-                                       "()" + componentType.getDescriptor(),
+                                       desc,
                                        null, null);
 
-        JetMethodAnnotationWriter aw = JetMethodAnnotationWriter.visitAnnotation(mv);
-        BitSet kotlinFlags = getFlagsForVisibility(function.getVisibility());
-        aw.writeFlags(kotlinFlags);
-        aw.writeKind(DescriptorKindUtils.kindToInt(function.getKind()));
-        aw.writeNullableReturnType(returnType.isNullable());
-        JvmMethodSignature jvmMethodSignature = typeMapper.mapToCallableMethod(function, false, kind).getSignature();
-        aw.writeReturnType(jvmMethodSignature.getKotlinReturnType());
-        aw.visitEnd();
+        FunctionCodegen.genJetAnnotations(state, function, null, null, mv);
 
         mv.visitCode();
         InstructionAdapter iv = new InstructionAdapter(mv);
         if (!componentType.equals(Type.VOID_TYPE)) {
-            Type classType = typeMapper.mapType(descriptor.getDefaultType(), JetTypeMapperMode.IMPL);
-            iv.load(0, classType);
-            iv.getfield(classType.getInternalName(), parameter.getName().getName(), componentType.getDescriptor());
+            iv.load(0, classAsmType);
+            iv.invokevirtual(classAsmType.getInternalName(), PropertyCodegen.getterName(parameter.getName()), desc);
         }
         iv.areturn(componentType);
 
@@ -420,15 +658,15 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
                 FunctionCodegen.endVisit(mv, "values()", myClass);
             }
             {
-                Type type = typeMapper.mapType(descriptor.getDefaultType(), JetTypeMapperMode.IMPL);
 
                 MethodVisitor mv =
-                        v.newMethod(myClass, ACC_PUBLIC | ACC_STATIC, "valueOf", "(Ljava/lang/String;)" + type.getDescriptor(), null, null);
+                        v.newMethod(myClass, ACC_PUBLIC | ACC_STATIC, "valueOf", "(Ljava/lang/String;)" + classAsmType.getDescriptor(), null,
+                                    null);
                 mv.visitCode();
-                mv.visitLdcInsn(type);
+                mv.visitLdcInsn(classAsmType);
                 mv.visitVarInsn(ALOAD, 0);
                 mv.visitMethodInsn(INVOKESTATIC, "java/lang/Enum", "valueOf", "(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;");
-                mv.visitTypeInsn(CHECKCAST, type.getInternalName());
+                mv.visitTypeInsn(CHECKCAST, classAsmType.getInternalName());
                 mv.visitInsn(ARETURN);
                 FunctionCodegen.endVisit(mv, "values()", myClass);
             }
@@ -457,7 +695,7 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
             MethodVisitor mv = v.newMethod(null, ACC_BRIDGE | ACC_SYNTHETIC | ACC_STATIC, bridge.getName().getName(),
                                            method.getDescriptor(), null, null);
             if (state.getClassBuilderMode() == ClassBuilderMode.STUBS) {
-                StubCodegen.generateStubCode(mv);
+                genStubCode(mv);
             }
             else if (state.getClassBuilderMode() == ClassBuilderMode.FULL) {
                 mv.visitCode();
@@ -502,7 +740,7 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
                                                               original,
                                                               getter.getVisibility());
                 if (state.getClassBuilderMode() == ClassBuilderMode.STUBS) {
-                    StubCodegen.generateStubCode(mv);
+                    genStubCode(mv);
                 }
                 else if (state.getClassBuilderMode() == ClassBuilderMode.FULL) {
                     mv.visitCode();
@@ -537,7 +775,7 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
                                                               original,
                                                               setter.getVisibility());
                 if (state.getClassBuilderMode() == ClassBuilderMode.STUBS) {
-                    StubCodegen.generateStubCode(mv);
+                    genStubCode(mv);
                 }
                 else if (state.getClassBuilderMode() == ClassBuilderMode.FULL) {
                     mv.visitCode();
@@ -571,48 +809,17 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
         }
     }
 
-    private void generateFieldForObjectInstance() {
-        if (isNonLiteralObject(myClass)) {
-            Type type = typeMapper.mapType(descriptor);
-            v.newField(myClass, ACC_PUBLIC | ACC_STATIC | ACC_FINAL, "$instance", type.getDescriptor(), null, null);
+    private void generateFieldForSingleton() {
+        if (!(isNonLiteralObject(myClass) || descriptor.getKind() == ClassKind.CLASS_OBJECT)) return;
 
-            staticInitializerChunks.add(new CodeChunk() {
-                @Override
-                public void generate(InstructionAdapter v) {
-                    String name = jvmName();
-                    v.anew(Type.getObjectType(name));
-                    v.dup();
-                    v.invokespecial(name, "<init>", "()V");
-                    v.putstatic(name, "$instance",
-                                typeMapper.mapType(descriptor).getDescriptor());
-                }
-            });
-        }
-    }
+        v.newField(myClass, ACC_PUBLIC | ACC_STATIC | ACC_FINAL, JvmAbi.INSTANCE_FIELD, classAsmType.getDescriptor(), null, null);
 
-    private void generateFieldForClassObject() {
-        final JetClassObject classObject = getClassObject();
-        if (classObject != null) {
-            final ClassDescriptor descriptor1 = bindingContext.get(BindingContext.CLASS, classObject.getObjectDeclaration());
-            assert descriptor1 != null;
-            Type type = Type.getObjectType(typeMapper.mapType(descriptor1).getInternalName());
-            v.newField(classObject, ACC_PUBLIC | ACC_STATIC | ACC_FINAL, "$classobj", type.getDescriptor(), null, null);
-
-            staticInitializerChunks.add(new CodeChunk() {
-                @Override
-                public void generate(InstructionAdapter v) {
-                    final ClassDescriptor descriptor1 = bindingContext.get(BindingContext.CLASS, classObject.getObjectDeclaration());
-                    assert descriptor1 != null;
-                    String name = typeMapper.mapType(descriptor1.getDefaultType(), JetTypeMapperMode.IMPL).getInternalName();
-                    final Type classObjectType = Type.getObjectType(name);
-                    v.anew(classObjectType);
-                    v.dup();
-                    v.invokespecial(name, "<init>", "()V");
-                    v.putstatic(typeMapper.mapType(descriptor).getInternalName(), "$classobj",
-                                classObjectType.getDescriptor());
-                }
-            });
-        }
+        staticInitializerChunks.add(new CodeChunk() {
+            @Override
+            public void generate(InstructionAdapter iv) {
+                genInitSingletonField(classAsmType, iv);
+            }
+        });
     }
 
     protected void generatePrimaryConstructor() {
@@ -631,7 +838,7 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
         }
 
         MutableClosure closure = context.closure;
-        boolean hasThis0 = closure != null && closure.getCaptureThis() != null;
+        boolean hasCapturedThis = closure != null && closure.getCaptureThis() != null;
 
         final CallableMethod callableMethod = typeMapper.mapToCallableMethod(constructorDescriptor, context.closure);
         final JvmMethodSignature constructorMethod = callableMethod.getSignature();
@@ -644,31 +851,31 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
 
         AnnotationVisitor jetConstructorVisitor = mv.visitAnnotation(JvmStdlibNames.JET_CONSTRUCTOR.getDescriptor(), true);
 
-        int flagsValue = BitSetUtils.toInt(getFlagsForVisibility(constructorDescriptor.getVisibility()));
+        int flagsValue = getFlagsForVisibility(constructorDescriptor.getVisibility());
         if (JvmStdlibNames.FLAGS_DEFAULT_VALUE != flagsValue) {
-            jetConstructorVisitor.visit(JvmStdlibNames.JET_CLASS_FLAGS_FIELD, flagsValue);
+            jetConstructorVisitor.visit(JvmStdlibNames.JET_FLAGS_FIELD, flagsValue);
         }
 
         jetConstructorVisitor.visitEnd();
 
         AnnotationCodegen.forMethod(mv, typeMapper).genAnnotations(constructorDescriptor);
 
-        writeParameterAnnotations(constructorDescriptor, constructorMethod, hasThis0, mv);
+        writeParameterAnnotations(constructorDescriptor, constructorMethod, hasCapturedThis, mv);
 
         if (state.getClassBuilderMode() == ClassBuilderMode.STUBS) {
-            StubCodegen.generateStubCode(mv);
+            genStubCode(mv);
             return;
         }
 
-        generatePrimiryConstructorImpl(constructorDescriptor, constructorContext, constructorMethod, callableMethod, hasThis0, closure, mv);
+        generatePrimaryConstructorImpl(constructorDescriptor, constructorContext, constructorMethod, callableMethod, hasCapturedThis, closure, mv);
     }
 
-    private void generatePrimiryConstructorImpl(
+    private void generatePrimaryConstructorImpl(
             ConstructorDescriptor constructorDescriptor,
             ConstructorContext constructorContext,
             JvmMethodSignature constructorMethod,
             CallableMethod callableMethod,
-            boolean hasThis0,
+            boolean hasCapturedThis,
             MutableClosure closure,
             MethodVisitor mv
     ) {
@@ -683,8 +890,7 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
         final InstructionAdapter iv = new InstructionAdapter(mv);
         ExpressionCodegen codegen = new ExpressionCodegen(mv, frameMap, Type.VOID_TYPE, constructorContext, state);
 
-        Type classType = typeMapper.mapType(descriptor.getDefaultType(), JetTypeMapperMode.IMPL);
-        JvmClassName classname = JvmClassName.byType(classType);
+        JvmClassName classname = JvmClassName.byType(classAsmType);
 
         if (superCall == null) {
             genSimpleSuperCall(iv);
@@ -696,24 +902,24 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
             generateDelegatorToConstructorCall(iv, codegen, constructorDescriptor, frameMap);
         }
 
-        if (hasThis0) {
+        if (hasCapturedThis) {
             final Type type = typeMapper
                     .mapType(enclosingClassDescriptor(bindingContext, descriptor));
             String interfaceDesc = type.getDescriptor();
-            iv.load(0, classType);
+            iv.load(0, classAsmType);
             iv.load(frameMap.getOuterThisIndex(), type);
-            iv.putfield(classname.getInternalName(), THIS$0, interfaceDesc);
+            iv.putfield(classname.getInternalName(), CAPTURED_THIS_FIELD, interfaceDesc);
         }
 
         if (closure != null) {
-            int k = hasThis0 ? 2 : 1;
+            int k = hasCapturedThis ? 2 : 1;
             final String internalName = typeMapper.mapType(descriptor).getInternalName();
             final ClassifierDescriptor captureReceiver = closure.getCaptureReceiver();
             if (captureReceiver != null) {
                 iv.load(0, OBJECT_TYPE);
                 final Type asmType = typeMapper.mapType(captureReceiver.getDefaultType(), JetTypeMapperMode.IMPL);
                 iv.load(1, asmType);
-                iv.putfield(internalName, RECEIVER$0, asmType.getDescriptor());
+                iv.putfield(internalName, CAPTURED_RECEIVER_FIELD, asmType.getDescriptor());
                 k += asmType.getSize();
             }
 
@@ -739,7 +945,7 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
             }
 
             if (specifier instanceof JetDelegatorByExpressionSpecifier) {
-                genCallToDelegatorByExpressionSpecifier(iv, codegen, classType, classname, n++, specifier);
+                genCallToDelegatorByExpressionSpecifier(iv, codegen, classAsmType, classname, n++, specifier);
             }
         }
 
@@ -749,9 +955,9 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
             if (parameter.getValOrVarNode() != null) {
                 VariableDescriptor descriptor = paramDescrs.get(curParam);
                 Type type = typeMapper.mapType(descriptor);
-                iv.load(0, classType);
+                iv.load(0, classAsmType);
                 iv.load(frameMap.getIndex(descriptor), type);
-                iv.putfield(classname.getInternalName(), descriptor.getName().getName(), type.getDescriptor());
+                iv.putfield(classAsmType.getInternalName(), descriptor.getName().getName(), type.getDescriptor());
             }
             curParam++;
         }
@@ -767,7 +973,7 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
     }
 
     private void genSuperCallToDelegatorToSuperClass(InstructionAdapter iv) {
-        iv.load(0, Type.getType("L" + superClass + ";"));
+        iv.load(0, superClassAsmType);
         JetType superType = bindingContext.get(BindingContext.TYPE, superCall.getTypeReference());
         List<Type> parameterTypes = new ArrayList<Type>();
         assert superType != null;
@@ -784,14 +990,14 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
     }
 
     private void genSimpleSuperCall(InstructionAdapter iv) {
-        iv.load(0, Type.getType("L" + superClass + ";"));
+        iv.load(0, superClassAsmType);
         if (descriptor.getKind() == ClassKind.ENUM_CLASS || descriptor.getKind() == ClassKind.ENUM_ENTRY) {
-            iv.load(1, AsmTypeConstants.JAVA_STRING_TYPE);
+            iv.load(1, JAVA_STRING_TYPE);
             iv.load(2, Type.INT_TYPE);
-            iv.invokespecial(superClass, "<init>", "(Ljava/lang/String;I)V");
+            iv.invokespecial(superClassAsmType.getInternalName(), "<init>", "(Ljava/lang/String;I)V");
         }
         else {
-            iv.invokespecial(superClass, "<init>", "()V");
+            iv.invokespecial(superClassAsmType.getInternalName(), "<init>", "()V");
         }
     }
 
@@ -875,7 +1081,7 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
             codegen.genToJVMStack(expression);
 
             String delegateField = "$delegate_" + n;
-            Type fieldType = typeMapper.mapType(superClassDescriptor.getDefaultType());
+            Type fieldType = typeMapper.mapType(superClassDescriptor);
             String fieldDesc = fieldType.getDescriptor();
 
             v.newField(specifier, ACC_PRIVATE|ACC_FINAL|ACC_SYNTHETIC, delegateField, fieldDesc, /*TODO*/null, null);
@@ -1036,25 +1242,24 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
                 JvmMethodSignature jvmSignature =
                         typeMapper.mapToCallableMethod(inheritedFun, false, OwnerKind.IMPLEMENTATION).getSignature();
                 JetMethodAnnotationWriter aw = JetMethodAnnotationWriter.visitAnnotation(mv);
-                BitSet kotlinFlags = getFlagsForVisibility(fun.getVisibility());
+                int kotlinFlags = getFlagsForVisibility(fun.getVisibility());
                 if (fun instanceof PropertyAccessorDescriptor) {
-                    kotlinFlags.set(JvmStdlibNames.FLAG_PROPERTY_BIT);
+                    kotlinFlags |= JvmStdlibNames.FLAG_PROPERTY_BIT;
                     aw.writeTypeParameters(jvmSignature.getKotlinTypeParameter());
                     aw.writePropertyType(jvmSignature.getKotlinReturnType());
                 }
                 else {
                     JetType returnType = fun.getReturnType();
                     assert returnType != null;
-                    aw.writeNullableReturnType(returnType.isNullable());
                     aw.writeTypeParameters(jvmSignature.getKotlinTypeParameter());
                     aw.writeReturnType(jvmSignature.getKotlinReturnType());
                 }
+                kotlinFlags |= DescriptorKindUtils.kindToFlags(inheritedFun.getKind());
                 aw.writeFlags(kotlinFlags);
-                aw.writeKind(DescriptorKindUtils.kindToInt(inheritedFun.getKind()));
                 aw.visitEnd();
 
                 if (state.getClassBuilderMode() == ClassBuilderMode.STUBS) {
-                    StubCodegen.generateStubCode(mv);
+                    genStubCode(mv);
                 }
                 else if (state.getClassBuilderMode() == ClassBuilderMode.FULL) {
                     mv.visitCode();
@@ -1164,7 +1369,7 @@ public class ImplementationBodyCodegen extends ClassBodyCodegen {
         }
         else if (declaration instanceof JetEnumEntry) {
             String name = declaration.getName();
-            final String desc = "L" + typeMapper.mapType(descriptor.getDefaultType(), JetTypeMapperMode.IMPL).getInternalName() + ";";
+            final String desc = "L" + classAsmType.getInternalName() + ";";
             v.newField(declaration, ACC_PUBLIC | ACC_ENUM | ACC_STATIC | ACC_FINAL, name, desc, null, null);
             if (myEnumConstants.isEmpty()) {
                 staticInitializerChunks.add(new CodeChunk() {

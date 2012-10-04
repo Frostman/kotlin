@@ -40,7 +40,7 @@ public inline fun <T> Iterable<T>.first() : T {
     return this.get(0)
   }
 
-  return this.iterator().sure().next()
+  return this.iterator()!!.next()
 }
 
 /**
@@ -60,7 +60,7 @@ public fun <T> Iterable<T>.last() : T {
     return this.get(this.size() - 1)
   }
 
-  val iterator = this.iterator().sure()
+  val iterator = this.iterator()!!
   var last : T = iterator.next()
 
   while (iterator.hasNext()) {
@@ -106,14 +106,14 @@ public fun <T> Iterable<T>.withIndices(): List<Pair<Int, T>> {
     return answer
 }
 
-public inline fun <in T: Comparable<T>> Iterable<T>.sort() : List<T> {
-    val list = toList()
+public inline fun <in T: Comparable<T>> MutableIterable<T>.sort() : List<T> {
+    val list = toCollection(ArrayList<T>())
     java.util.Collections.sort(list)
     return list
 }
 
 public inline fun <in T> Iterable<T>.sort(comparator: java.util.Comparator<T>) : List<T> {
-    val list = toList()
+    val list = toCollection(ArrayList<T>())
     java.util.Collections.sort(list, comparator)
     return list
 }

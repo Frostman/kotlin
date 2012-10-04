@@ -151,7 +151,7 @@ public inline fun DoubleArray.forEach(operation: (Double) -> Unit) : Unit = for 
  *
  * @includeFunctionBody ../../test/CollectionTest.kt fold
  */
-public inline fun DoubleArray.fold(initial: Double, operation: (Double, Double) -> Double): Double {
+public inline fun <R> DoubleArray.fold(initial: R, operation: (R, Double) -> R): R {
     var answer = initial
     for (element in this) answer = operation(answer, element)
     return answer
@@ -162,7 +162,7 @@ public inline fun DoubleArray.fold(initial: Double, operation: (Double, Double) 
  *
  * @includeFunctionBody ../../test/CollectionTest.kt foldRight
  */
-public inline fun DoubleArray.foldRight(initial: Double, operation: (Double, Double) -> Double): Double = reverse().fold(initial, {x, y -> operation(y, x)})
+public inline fun <R> DoubleArray.foldRight(initial: R, operation: (Double, R) -> R): R = reverse().fold(initial, {x, y -> operation(y, x)})
 
 
 /**
@@ -172,7 +172,7 @@ public inline fun DoubleArray.foldRight(initial: Double, operation: (Double, Dou
  * @includeFunctionBody ../../test/CollectionTest.kt reduce
  */
 public inline fun DoubleArray.reduce(operation: (Double, Double) -> Double): Double {
-    val iterator = this.iterator().sure()
+    val iterator = this.iterator()!!
     if (!iterator.hasNext()) {
         throw UnsupportedOperationException("Empty iterable can't be reduced")
     }
@@ -226,7 +226,7 @@ public inline fun <K> DoubleArray.groupByTo(result: MutableMap<K, MutableList<Do
 public inline fun DoubleArray.makeString(separator: String = ", ", prefix: String = "", postfix: String = "", limit: Int = -1, truncated: String = "..."): String {
     val buffer = StringBuilder()
     appendString(buffer, separator, prefix, postfix, limit, truncated)
-    return buffer.toString().sure()
+    return buffer.toString()!!
 }
 
 /** Returns a list containing the everything but the first elements that satisfy the given *predicate* */

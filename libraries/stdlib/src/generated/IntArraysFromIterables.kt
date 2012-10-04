@@ -151,7 +151,7 @@ public inline fun IntArray.forEach(operation: (Int) -> Unit) : Unit = for (eleme
  *
  * @includeFunctionBody ../../test/CollectionTest.kt fold
  */
-public inline fun IntArray.fold(initial: Int, operation: (Int, Int) -> Int): Int {
+public inline fun <R> IntArray.fold(initial: R, operation: (R, Int) -> R): R {
     var answer = initial
     for (element in this) answer = operation(answer, element)
     return answer
@@ -162,7 +162,7 @@ public inline fun IntArray.fold(initial: Int, operation: (Int, Int) -> Int): Int
  *
  * @includeFunctionBody ../../test/CollectionTest.kt foldRight
  */
-public inline fun IntArray.foldRight(initial: Int, operation: (Int, Int) -> Int): Int = reverse().fold(initial, {x, y -> operation(y, x)})
+public inline fun <R> IntArray.foldRight(initial: R, operation: (Int, R) -> R): R = reverse().fold(initial, {x, y -> operation(y, x)})
 
 
 /**
@@ -172,7 +172,7 @@ public inline fun IntArray.foldRight(initial: Int, operation: (Int, Int) -> Int)
  * @includeFunctionBody ../../test/CollectionTest.kt reduce
  */
 public inline fun IntArray.reduce(operation: (Int, Int) -> Int): Int {
-    val iterator = this.iterator().sure()
+    val iterator = this.iterator()!!
     if (!iterator.hasNext()) {
         throw UnsupportedOperationException("Empty iterable can't be reduced")
     }
@@ -226,7 +226,7 @@ public inline fun <K> IntArray.groupByTo(result: MutableMap<K, MutableList<Int>>
 public inline fun IntArray.makeString(separator: String = ", ", prefix: String = "", postfix: String = "", limit: Int = -1, truncated: String = "..."): String {
     val buffer = StringBuilder()
     appendString(buffer, separator, prefix, postfix, limit, truncated)
-    return buffer.toString().sure()
+    return buffer.toString()!!
 }
 
 /** Returns a list containing the everything but the first elements that satisfy the given *predicate* */

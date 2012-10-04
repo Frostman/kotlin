@@ -105,7 +105,7 @@ class CollectionTest {
         assertNull(x)
 
         val f = data.find{it.startsWith("f")}
-        f.sure()
+        f!!
         assertEquals("foo", f)
     }
 
@@ -135,6 +135,18 @@ class CollectionTest {
         }
     }
 
+    test fun foldWithDifferentTypes() {
+        expect(7) {
+            val numbers = arrayList("a", "ab", "abc")
+            numbers.fold(1){ a, b -> a + b.size}
+        }
+
+        expect("1234") {
+            val numbers = arrayList(1, 2, 3, 4)
+            numbers.fold(""){ a, b -> a + b}
+        }
+    }
+
     test fun foldWithNonCommutativeOperation() {
         expect(1) {
             val numbers = arrayList(1, 2, 3)
@@ -146,6 +158,13 @@ class CollectionTest {
         expect("1234") {
             val numbers = arrayList(1, 2, 3, 4)
             numbers.map{it.toString()}.foldRight(""){ a, b -> a + b}
+        }
+    }
+
+    test fun foldRightWithDifferentTypes() {
+        expect("1234") {
+            val numbers = arrayList(1, 2, 3, 4)
+            numbers.foldRight(""){ a, b -> "" + a + b}
         }
     }
 
@@ -390,7 +409,7 @@ class CollectionTest {
         private val collection = collection
 
         override fun iterator(): Iterator<T> {
-            return collection.iterator().sure()
+            return collection.iterator()
         }
     }
 }

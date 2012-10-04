@@ -16,11 +16,10 @@
 
 package org.jetbrains.jet.lang.resolve.java;
 
-import com.intellij.psi.PsiClass;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.lang.descriptors.FunctionDescriptor;
 import org.jetbrains.jet.lang.descriptors.VariableDescriptor;
-import org.jetbrains.jet.lang.resolve.name.Name;
+import org.jetbrains.jet.lang.resolve.java.wrapper.PsiMethodWrapper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,17 +29,11 @@ import java.util.Set;
 * @author Stepan Koltsov
 */
 class NamedMembers {
-    Name name;
     List<PsiMethodWrapper> methods = new ArrayList<PsiMethodWrapper>(0);
 
     @Nullable
-    PsiFieldWrapper field;
-    @Nullable
     List<PropertyAccessorData> propertyAccessors;
 
-    @Nullable
-    private PsiClass nestedClasses;
-    
     Set<VariableDescriptor> propertyDescriptors;
     /** Including from supertypes */
     Set<FunctionDescriptor> functionDescriptors;

@@ -27,10 +27,9 @@ import com.intellij.psi.util.PsiTreeUtil;
 import jet.runtime.typeinfo.JetValueParameter;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.jet.lang.resolve.java.JavaDescriptorResolver;
-import org.jetbrains.jet.lang.resolve.name.FqName;
 import org.jetbrains.jet.lang.resolve.java.JvmAbi;
 import org.jetbrains.jet.lang.resolve.java.kt.JetValueParameterAnnotation;
+import org.jetbrains.jet.lang.resolve.name.FqName;
 import org.jetbrains.jet.lang.resolve.name.Name;
 import org.jetbrains.jet.util.QualifiedNamesUtil;
 
@@ -86,17 +85,16 @@ class JetFromJavaDescriptorHelper {
                 JetValueParameter.class.getSimpleName(), project, scope);
 
         for (PsiAnnotation parameterAnnotation : valueParametersAnnotations) {
-            String qualifiedName = parameterAnnotation.getQualifiedName();
-
-            if (qualifiedName == null || !qualifiedName.equals(JetValueParameter.class.getCanonicalName())) {
+            PsiParameter parameter = PsiTreeUtil.getParentOfType(parameterAnnotation, PsiParameter.class);
+            if (parameter == null) {
                 continue;
             }
 
-            if (!new JetValueParameterAnnotation(parameterAnnotation).receiver()) {
+            if (!JetValueParameterAnnotation.get(parameter).receiver()) {
                 continue;
             }
 
-            PsiMethod psiMethod = PsiTreeUtil.getParentOfType(parameterAnnotation, PsiMethod.class);
+            PsiMethod psiMethod = PsiTreeUtil.getParentOfType(parameter, PsiMethod.class);
             if (psiMethod != null) {
                 extensionNames.add(psiMethod.getName());
             }
@@ -134,13 +132,14 @@ class JetFromJavaDescriptorHelper {
         PsiClass containingClass = method.getContainingClass();
 
         if (containingClass != null) {
-            FqName classFQN = new FqName(containingClass.getQualifiedName());
+            final String qualifiedName = containingClass.getQualifiedName();
+            assert qualifiedName != null;
 
-            if (classFQN != null) {
-                if (classFQN.shortName().toString().equals(JvmAbi.PACKAGE_CLASS)) {
-                    FqName classParentFQN = QualifiedNamesUtil.withoutLastSegment(classFQN);
-                    return QualifiedNamesUtil.combine(classParentFQN, Name.identifier(method.getName()));
-                }
+            FqName classFQN = new FqName(qualifiedName);
+
+            if (classFQN.shortName().toString().equals(JvmAbi.PACKAGE_CLASS)) {
+                FqName classParentFQN = QualifiedNamesUtil.withoutLastSegment(classFQN);
+                return QualifiedNamesUtil.combine(classParentFQN, Name.identifier(method.getName()));
             }
         }
 
@@ -166,14 +165,8 @@ class JetFromJavaDescriptorHelper {
 
             // Should be parameter with JetValueParameter.receiver == true
             for (PsiParameter parameter : psiMethod.getParameterList().getParameters()) {
-                for (PsiAnnotation psiAnnotation : JavaDescriptorResolver.getAllAnnotations(parameter)) {
-                    if (!JetValueParameter.class.getCanonicalName().equals(psiAnnotation.getQualifiedName())) {
-                        continue;
-                    }
-
-                    if (filterPredicate.apply(new JetValueParameterAnnotation(psiAnnotation))) {
-                        selectedMethods.add(psiMethod);
-                    }
+                if (filterPredicate.apply(JetValueParameterAnnotation.get(parameter))) {
+                    selectedMethods.add(psiMethod);
                 }
             }
         }

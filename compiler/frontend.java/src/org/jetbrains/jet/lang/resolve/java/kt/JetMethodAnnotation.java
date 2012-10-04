@@ -22,78 +22,58 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.lang.resolve.java.JavaDescriptorResolver;
 import org.jetbrains.jet.lang.resolve.java.JvmStdlibNames;
-import org.jetbrains.jet.utils.BitSetUtils;
-
-import java.util.BitSet;
 
 /**
  * @author Stepan Koltsov
+ * @author alex.tkachman
  */
 public class JetMethodAnnotation extends PsiAnnotationWithFlags {
-
-    public JetMethodAnnotation(@Nullable PsiAnnotation psiAnnotation) {
-        super(psiAnnotation);
-    }
-    
-    private BitSet flags = null;
-    @NotNull
-    public BitSet flags() {
-        if (flags == null) {
-            int flagsValue = getIntAttribute(JvmStdlibNames.JET_METHOD_FLAGS_FIELD, JvmStdlibNames.FLAGS_DEFAULT_VALUE);
-            flags = BitSetUtils.toBitSet(flagsValue);
-        }
-        return flags;
-    }
-
-    private int kind;
-    private boolean kindInitialized;
-    public int kind() {
-        if (!kindInitialized) {
-            kind = getIntAttribute(JvmStdlibNames.JET_METHOD_KIND_FIELD, DescriptorKindUtils.getDefaultKindValue());
-            kindInitialized = true;
-        }
-        return kind;
+    private static final JetMethodAnnotation NULL_ANNOTATION = new JetMethodAnnotation(null);
+    static {
+        NULL_ANNOTATION.checkInitialized();
     }
 
     private String typeParameters;
+    private String returnType;
+    private String propertyType;
+
+    private JetMethodAnnotation(@Nullable PsiAnnotation psiAnnotation) {
+        super(psiAnnotation);
+    }
+
+    @Override
+    protected void initialize() {
+        super.initialize();
+        typeParameters = getStringAttribute(JvmStdlibNames.JET_METHOD_TYPE_PARAMETERS_FIELD, "");
+        returnType = getStringAttribute(JvmStdlibNames.JET_METHOD_RETURN_TYPE_FIELD, "");
+        propertyType = getStringAttribute(JvmStdlibNames.JET_METHOD_PROPERTY_TYPE_FIELD, "");
+    }
+
+    public int kind() {
+        return flags() & JvmStdlibNames.FLAG_METHOD_KIND_MASK;
+    }
+
     @NotNull
     public String typeParameters() {
-        if (typeParameters == null) {
-            typeParameters = getStringAttribute(JvmStdlibNames.JET_METHOD_TYPE_PARAMETERS_FIELD, "");
-        }
+        checkInitialized();
         return typeParameters;
     }
 
-    private String returnType;
     @NotNull
     public String returnType() {
-        if (returnType == null) {
-            returnType = getStringAttribute(JvmStdlibNames.JET_METHOD_RETURN_TYPE_FIELD, "");
-        }
+        checkInitialized();
         return returnType;
     }
 
-    private boolean returnTypeNullable;
-    private boolean returnTypeNullableInitialized;
-    @NotNull
-    public boolean returnTypeNullable() {
-        if (!returnTypeNullableInitialized) {
-            returnTypeNullable = getBooleanAttribute(JvmStdlibNames.JET_METHOD_NULLABLE_RETURN_TYPE_FIELD, false);
-            returnTypeNullableInitialized = true;
-        }
-        return returnTypeNullable;
-    }
-
-    private String propertyType;
     @NotNull
     public String propertyType() {
-        if (propertyType == null) {
-            propertyType = getStringAttribute(JvmStdlibNames.JET_METHOD_PROPERTY_TYPE_FIELD, "");
-        }
+        checkInitialized();
         return propertyType;
     }
 
     public static JetMethodAnnotation get(PsiMethod psiMethod) {
-        return new JetMethodAnnotation(JavaDescriptorResolver.findAnnotation(psiMethod, JvmStdlibNames.JET_METHOD.getFqName().getFqName()));
+        final PsiAnnotation annotation =
+                JavaDescriptorResolver.findAnnotation(psiMethod, JvmStdlibNames.JET_METHOD.getFqName().getFqName());
+        return annotation != null ? new JetMethodAnnotation(annotation) : NULL_ANNOTATION;
     }
 }

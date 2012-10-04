@@ -19,22 +19,22 @@ package org.jetbrains.k2js.translate.expression;
 import com.google.dart.compiler.backend.js.ast.JsExpression;
 import com.google.dart.compiler.backend.js.ast.JsInvocation;
 import com.google.dart.compiler.backend.js.ast.JsNameRef;
-import com.google.dart.compiler.util.AstUtil;
+import com.google.dart.compiler.backend.js.ast.JsNumberLiteral;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.lang.psi.*;
+import org.jetbrains.jet.lang.resolve.name.Name;
 import org.jetbrains.k2js.translate.context.TranslationContext;
 import org.jetbrains.k2js.translate.general.AbstractTranslator;
 import org.jetbrains.k2js.translate.general.Translation;
 
-import static org.jetbrains.k2js.translate.utils.JsAstUtils.setQualifier;
 import static org.jetbrains.k2js.translate.utils.JsAstUtils.sum;
+import static org.jetbrains.k2js.translate.utils.JsDescriptorUtils.getNameIfStandardType;
 
 
 /**
  * @author Pavel Talanov
  */
-//TODO: add toString call for non-primitive object
 public final class StringTemplateTranslator extends AbstractTranslator {
 
     @NotNull
@@ -82,9 +82,30 @@ public final class StringTemplateTranslator extends AbstractTranslator {
             assert entryExpression != null :
                     "JetStringTemplateEntryWithExpression must have not null entry expression.";
             JsExpression translatedExpression = Translation.translateAsExpression(entryExpression, context());
-            JsNameRef toString = AstUtil.newQualifiedNameRef("toString");
-            setQualifier(toString, translatedExpression);
-            append(new JsInvocation(toString));
+            if (translatedExpression instanceof JsNumberLiteral) {
+                append(context().program().getStringLiteral(translatedExpression.toString()));
+                return;
+            }
+            if (mustCallToString(entryExpression)) {
+                append(new JsInvocation(new JsNameRef("toString", translatedExpression)));
+            } else {
+                append(translatedExpression);
+            }
+        }
+
+        private boolean mustCallToString(@NotNull JetExpression entryExpression) {
+            Name typeName = getNameIfStandardType(entryExpression, context());
+            if (typeName == null) {
+                return true;
+            }
+            //TODO: this is a hacky optimization, should use some generic approach
+            if (typeName.getName().equals("String")) {
+                return false;
+            }
+            if (typeName.getName().equals("Int") && resultingExpression != null) {
+                return false;
+            }
+            return true;
         }
 
         @Override

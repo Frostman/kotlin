@@ -23,20 +23,20 @@ public inline fun <K,V> Map<K,V>?.orEmpty() : Map<K,V>
 
 /** Returns the key of the entry */
 val <K,V> Map.Entry<K,V>.key : K
-    get() = getKey().sure()
+    get() = getKey()!!
 
 /** Returns the value of the entry */
 val <K,V> Map.Entry<K,V>.value : V
-    get() = getValue().sure()
+    get() = getValue()!!
 
 /** Returns the key of the entry */
 fun <K,V> Map.Entry<K,V>.component1() : K {
-    return getKey().sure()
+    return getKey()!!
 }
 
 /** Returns the value of the entry */
 fun <K,V> Map.Entry<K,V>.component2() : V {
-    return getValue().sure()
+    return getValue()!!
 }
 
 /**
@@ -44,10 +44,9 @@ fun <K,V> Map.Entry<K,V>.component2() : V {
  *
  * @includeFunctionBody ../../test/MapTest.kt getOrElse
  */
-public inline fun <K,V> Map<K,V>.getOrElse(key: K, defaultValue: ()-> V?) : V? {
-    val current = this.get(key)
-    if (current != null) {
-        return current
+public inline fun <K,V> Map<K,V>.getOrElse(key: K, defaultValue: ()-> V) : V {
+    if (this.containsKey(key)) {
+        return this.get(key) as V
     } else {
         return defaultValue()
     }
@@ -59,9 +58,8 @@ public inline fun <K,V> Map<K,V>.getOrElse(key: K, defaultValue: ()-> V?) : V? {
  * @includeFunctionBody ../../test/MapTest.kt getOrElse
  */
 public inline fun <K,V> MutableMap<K,V>.getOrPut(key: K, defaultValue: ()-> V) : V {
-    val current = this.get(key)
-    if (current != null) {
-        return current
+    if (this.containsKey(key)) {
+        return this.get(key) as V
     } else {
         val answer = defaultValue()
         this.put(key, answer)
@@ -93,7 +91,7 @@ public inline fun <K,V,R, C: MutableCollection<in R>> Map<K,V>.mapTo(result: C, 
 /**
  * Populates the given *result* [[Map]] with the value returned by applying the *transform* function on each [[Map.Entry]] in this [[Map]]
  */
-public inline fun <K,V,R,C: MutableMap<K,R>> MutableMap<K,V>.mapValuesTo(result: C, transform : (Map.Entry<K,V>) -> R) : C {
+public inline fun <K,V,R,C: MutableMap<K,R>> Map<K,V>.mapValuesTo(result: C, transform : (Map.Entry<K,V>) -> R) : C {
   for (e in this) {
       val newValue = transform(e)
       result.put(e.key, newValue)
@@ -102,7 +100,7 @@ public inline fun <K,V,R,C: MutableMap<K,R>> MutableMap<K,V>.mapValuesTo(result:
 }
 
 /**
- * Puts all the entries into the map with the first value in the tuple being the key and the second the value
+ * Puts all the entries into this [[MutableMap]] with the first value in the pair being the key and the second the value
  */
 public inline fun <K,V> MutableMap<K,V>.putAll(vararg values: Pair<K, V>): Unit {
     for (v in values) {
@@ -111,7 +109,7 @@ public inline fun <K,V> MutableMap<K,V>.putAll(vararg values: Pair<K, V>): Unit 
 }
 
 /**
- * Copies the entries in this [[Map]] to the given *map*
+ * Copies the entries in this [[Map]] to the given mutable *map*
  */
 public inline fun <K,V> Map<K,V>.toMap(map: MutableMap<K,V>): Map<K,V> {
     map.putAll(this)

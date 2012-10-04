@@ -27,7 +27,6 @@ import org.jetbrains.jet.lang.resolve.java.JavaDescriptorResolver;
 import org.jetbrains.jet.lang.resolve.java.PsiClassFinderImpl;
 import org.jetbrains.jet.lang.resolve.java.JavaTypeTransformer;
 import org.jetbrains.jet.lang.resolve.java.JavaDescriptorSignatureResolver;
-import org.jetbrains.jet.lang.resolve.NamespaceFactoryImpl;
 import org.jetbrains.annotations.NotNull;
 import javax.annotation.PreDestroy;
 
@@ -44,7 +43,6 @@ public class InjectorForJavaDescriptorResolver {
     private PsiClassFinderImpl psiClassFinder;
     private JavaTypeTransformer javaTypeTransformer;
     private JavaDescriptorSignatureResolver javaDescriptorSignatureResolver;
-    private NamespaceFactoryImpl namespaceFactory;
 
     public InjectorForJavaDescriptorResolver(
         @NotNull Project project,
@@ -62,7 +60,6 @@ public class InjectorForJavaDescriptorResolver {
         this.psiClassFinder = new PsiClassFinderImpl();
         this.javaTypeTransformer = new JavaTypeTransformer();
         this.javaDescriptorSignatureResolver = new JavaDescriptorSignatureResolver();
-        this.namespaceFactory = new NamespaceFactoryImpl();
 
         javaBridgeConfiguration.setBuiltinsScopeExtensionMode(builtinsScopeExtensionMode);
         javaBridgeConfiguration.setJavaSemanticServices(javaSemanticServices);
@@ -74,7 +71,6 @@ public class InjectorForJavaDescriptorResolver {
         this.javaSemanticServices.setTypeTransformer(javaTypeTransformer);
 
         this.javaDescriptorResolver.setJavaDescriptorSignatureResolver(javaDescriptorSignatureResolver);
-        this.javaDescriptorResolver.setNamespaceFactory(namespaceFactory);
         this.javaDescriptorResolver.setProject(project);
         this.javaDescriptorResolver.setPsiClassFinder(psiClassFinder);
         this.javaDescriptorResolver.setSemanticServices(javaSemanticServices);
@@ -85,12 +81,7 @@ public class InjectorForJavaDescriptorResolver {
         javaTypeTransformer.setJavaSemanticServices(javaSemanticServices);
         javaTypeTransformer.setResolver(javaDescriptorResolver);
 
-        javaDescriptorSignatureResolver.setJavaDescriptorResolver(javaDescriptorResolver);
         javaDescriptorSignatureResolver.setJavaSemanticServices(javaSemanticServices);
-
-        namespaceFactory.setConfiguration(javaBridgeConfiguration);
-        namespaceFactory.setModuleDescriptor(moduleDescriptor);
-        namespaceFactory.setTrace(bindingTrace);
 
         javaBridgeConfiguration.init();
 

@@ -18,45 +18,40 @@ package org.jetbrains.jet.lang.resolve.java.kt;
 
 import com.intellij.psi.PsiAnnotation;
 import com.intellij.psi.PsiMethod;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.jet.lang.resolve.java.JavaDescriptorResolver;
 import org.jetbrains.jet.lang.resolve.java.JvmStdlibNames;
-import org.jetbrains.jet.utils.BitSetUtils;
-
-import java.util.BitSet;
 
 /**
  * @author Stepan Koltsov
  */
 public class JetConstructorAnnotation extends PsiAnnotationWithFlags {
+    private static final JetConstructorAnnotation NULL_ANNOTATION = new JetConstructorAnnotation(null);
+    static {
+        NULL_ANNOTATION.checkInitialized();
+    }
 
-    public JetConstructorAnnotation(@Nullable PsiAnnotation psiAnnotation) {
+    private JetConstructorAnnotation(@Nullable PsiAnnotation psiAnnotation) {
         super(psiAnnotation);
     }
 
+    @Override
+    protected void initialize() {
+        super.initialize();
+        hidden = getBooleanAttribute(JvmStdlibNames.JET_CONSTRUCTOR_HIDDEN_FIELD, false);
+    }
+
     private boolean hidden;
-    private boolean hiddenInitialized = false;
+
     /** @deprecated */
     public boolean hidden() {
-        if (!hiddenInitialized) {
-            hidden = getBooleanAttribute(JvmStdlibNames.JET_CONSTRUCTOR_HIDDEN_FIELD, false);
-            hiddenInitialized = true;
-        }
+        checkInitialized();
         return hidden;
     }
 
-    private BitSet flags;
-    @NotNull
-    @Override
-    public BitSet flags() {
-        if (flags == null) {
-            flags = BitSetUtils.toBitSet(getIntAttribute(JvmStdlibNames.JET_CONSTRUCTOR_FLAGS_FIELD, JvmStdlibNames.FLAGS_DEFAULT_VALUE));
-        }
-        return flags;
-    }
-    
     public static JetConstructorAnnotation get(PsiMethod constructor) {
-        return new JetConstructorAnnotation(JavaDescriptorResolver.findAnnotation(constructor, JvmStdlibNames.JET_CONSTRUCTOR.getFqName().getFqName()));
+        final PsiAnnotation annotation =
+                JavaDescriptorResolver.findAnnotation(constructor, JvmStdlibNames.JET_CONSTRUCTOR.getFqName().getFqName());
+        return annotation != null ? new JetConstructorAnnotation(annotation) : NULL_ANNOTATION;
     }
 }

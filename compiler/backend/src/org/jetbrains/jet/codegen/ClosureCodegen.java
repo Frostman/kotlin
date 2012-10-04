@@ -22,7 +22,6 @@ package org.jetbrains.jet.codegen;
 
 import com.intellij.openapi.util.Pair;
 import com.intellij.psi.PsiElement;
-import org.jetbrains.asm4.Label;
 import org.jetbrains.asm4.MethodVisitor;
 import org.jetbrains.asm4.Type;
 import org.jetbrains.asm4.commons.InstructionAdapter;
@@ -41,6 +40,7 @@ import org.jetbrains.jet.lang.psi.JetElement;
 import org.jetbrains.jet.lang.psi.JetExpression;
 import org.jetbrains.jet.lang.resolve.BindingContext;
 import org.jetbrains.jet.lang.resolve.BindingContextUtils;
+import org.jetbrains.jet.lang.resolve.java.JvmAbi;
 import org.jetbrains.jet.lang.resolve.java.JvmClassName;
 import org.jetbrains.jet.lang.resolve.scopes.receivers.ReceiverDescriptor;
 import org.jetbrains.jet.lang.types.JetType;
@@ -49,10 +49,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.jetbrains.asm4.Opcodes.*;
-import static org.jetbrains.jet.lang.resolve.java.AsmTypeConstants.OBJECT_TYPE;
+import static org.jetbrains.jet.codegen.AsmUtil.*;
 import static org.jetbrains.jet.codegen.CodegenUtil.*;
 import static org.jetbrains.jet.codegen.binding.CodegenBinding.classNameForAnonymousClass;
 import static org.jetbrains.jet.codegen.binding.CodegenBinding.isLocalNamedFun;
+import static org.jetbrains.jet.lang.resolve.java.AsmTypeConstants.OBJECT_TYPE;
 
 public class ClosureCodegen extends GenerationStateAware {
 
@@ -108,7 +109,7 @@ public class ClosureCodegen extends GenerationStateAware {
             generateConstInstance(fun, cv);
         }
 
-        generateClosureFields(closure, cv, state.getTypeMapper());
+        genClosureFields(closure, cv, state.getTypeMapper());
 
         cv.done();
 
@@ -116,31 +117,19 @@ public class ClosureCodegen extends GenerationStateAware {
     }
 
     private void generateConstInstance(PsiElement fun, ClassBuilder cv) {
-        String classDescr = name.getDescriptor();
-        cv.newField(fun, ACC_PRIVATE | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, "$instance", classDescr, null, null);
+        MethodVisitor mv = cv.newMethod(fun, ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, "<clinit>", "()V", null, new String[0]);
+        final InstructionAdapter iv = new InstructionAdapter(mv);
 
-        MethodVisitor mv =
-                cv.newMethod(fun, ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, "$getInstance", "()" + classDescr, null, new String[0]);
+        cv.newField(fun, ACC_PUBLIC | ACC_STATIC | ACC_FINAL, JvmAbi.INSTANCE_FIELD, name.getDescriptor(), null, null);
+
         if (state.getClassBuilderMode() == ClassBuilderMode.STUBS) {
-            StubCodegen.generateStubCode(mv);
+            genStubCode(mv);
         }
         else if (state.getClassBuilderMode() == ClassBuilderMode.FULL) {
             mv.visitCode();
-            mv.visitFieldInsn(GETSTATIC, name.getInternalName(), "$instance", classDescr);
-            mv.visitInsn(DUP);
-            Label ret = new Label();
-            mv.visitJumpInsn(IFNONNULL, ret);
-
-            mv.visitInsn(POP);
-            mv.visitTypeInsn(NEW, name.getInternalName());
-            mv.visitInsn(DUP);
-            mv.visitMethodInsn(INVOKESPECIAL, name.getInternalName(), "<init>", "()V");
-            mv.visitInsn(DUP);
-            mv.visitFieldInsn(PUTSTATIC, name.getInternalName(), "$instance", classDescr);
-
-            mv.visitLabel(ret);
-            mv.visitInsn(ARETURN);
-            FunctionCodegen.endVisit(mv, "$getInstance", fun);
+            genInitSingletonField(name.getAsmType(), iv);
+            mv.visitInsn(RETURN);
+            FunctionCodegen.endVisit(mv, "<clinit>", fun);
         }
     }
 
@@ -176,7 +165,7 @@ public class ClosureCodegen extends GenerationStateAware {
                 cv.newMethod(fun, ACC_PUBLIC | ACC_BRIDGE | ACC_VOLATILE, "invoke", bridge.getAsmMethod().getDescriptor(), null,
                              new String[0]);
         if (state.getClassBuilderMode() == ClassBuilderMode.STUBS) {
-            StubCodegen.generateStubCode(mv);
+            genStubCode(mv);
         }
         if (state.getClassBuilderMode() == ClassBuilderMode.FULL) {
             mv.visitCode();
@@ -224,7 +213,7 @@ public class ClosureCodegen extends GenerationStateAware {
         final Method constructor = new Method("<init>", Type.VOID_TYPE, argTypes);
         final MethodVisitor mv = cv.newMethod(fun, ACC_PUBLIC, "<init>", constructor.getDescriptor(), null, new String[0]);
         if (state.getClassBuilderMode() == ClassBuilderMode.STUBS) {
-            StubCodegen.generateStubCode(mv);
+            genStubCode(mv);
         }
         else if (state.getClassBuilderMode() == ClassBuilderMode.FULL) {
             mv.visitCode();
@@ -258,11 +247,11 @@ public class ClosureCodegen extends GenerationStateAware {
         final ClassDescriptor captureThis = closure.getCaptureThis();
         if (captureThis != null) {
             final Type type = typeMapper.mapType(captureThis);
-            args.add(new Pair<String, Type>(THIS$0, type));
+            args.add(new Pair<String, Type>(CAPTURED_THIS_FIELD, type));
         }
         final ClassifierDescriptor captureReceiver = closure.getCaptureReceiver();
         if (captureReceiver != null) {
-            args.add(new Pair<String, Type>(RECEIVER$0, typeMapper.mapType(captureReceiver)));
+            args.add(new Pair<String, Type>(CAPTURED_RECEIVER_FIELD, typeMapper.mapType(captureReceiver)));
         }
 
         for (DeclarationDescriptor descriptor : closure.getCaptureVariables().keySet()) {

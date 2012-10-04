@@ -27,11 +27,9 @@ import com.intellij.openapi.project.Project;
 import org.jetbrains.jet.lang.resolve.BindingTrace;
 import org.jetbrains.jet.lang.resolve.BindingContext;
 import org.jetbrains.jet.codegen.ClassBuilderMode;
-import org.jetbrains.jet.codegen.ClassCodegen;
 import org.jetbrains.jet.codegen.ScriptCodegen;
 import org.jetbrains.jet.codegen.intrinsics.IntrinsicMethods;
 import org.jetbrains.jet.codegen.ClassFileFactory;
-import org.jetbrains.jet.codegen.MemberCodegen;
 import org.jetbrains.annotations.NotNull;
 import javax.annotation.PreDestroy;
 
@@ -47,11 +45,9 @@ public class InjectorForJvmCodegen {
     private BindingTrace bindingTrace;
     private BindingContext bindingContext;
     private ClassBuilderMode classBuilderMode;
-    private ClassCodegen classCodegen;
     private ScriptCodegen scriptCodegen;
     private IntrinsicMethods intrinsics;
     private ClassFileFactory classFileFactory;
-    private MemberCodegen memberCodegen;
 
     public InjectorForJvmCodegen(
         @NotNull JetTypeMapper jetTypeMapper,
@@ -70,14 +66,11 @@ public class InjectorForJvmCodegen {
         this.bindingTrace = jetTypeMapper.getBindingTrace();
         this.bindingContext = bindingTrace.getBindingContext();
         this.classBuilderMode = classBuilderFactory.getClassBuilderMode();
-        this.classCodegen = new ClassCodegen(getGenerationState());
         this.scriptCodegen = new ScriptCodegen(getGenerationState());
         this.intrinsics = new IntrinsicMethods();
         this.classFileFactory = new ClassFileFactory(getGenerationState());
-        this.memberCodegen = new MemberCodegen(getGenerationState());
 
         this.scriptCodegen.setClassFileFactory(classFileFactory);
-        this.scriptCodegen.setMemberCodegen(memberCodegen);
 
         this.classFileFactory.setBuilderFactory(classBuilderFactory);
 
@@ -105,10 +98,6 @@ public class InjectorForJvmCodegen {
         return this.project;
     }
 
-    public ClassCodegen getClassCodegen() {
-        return this.classCodegen;
-    }
-
     public ScriptCodegen getScriptCodegen() {
         return this.scriptCodegen;
     }
@@ -119,10 +108,6 @@ public class InjectorForJvmCodegen {
 
     public ClassFileFactory getClassFileFactory() {
         return this.classFileFactory;
-    }
-
-    public MemberCodegen getMemberCodegen() {
-        return this.memberCodegen;
     }
 
 }

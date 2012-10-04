@@ -27,6 +27,7 @@ import org.jetbrains.jet.lang.psi.JetClass;
 import org.jetbrains.jet.lang.psi.JetFile;
 import org.jetbrains.jet.lang.psi.JetNamedFunction;
 import org.jetbrains.jet.lang.psi.JetPsiUtil;
+import org.jetbrains.jet.lang.resolve.java.JvmAbi;
 import org.jetbrains.jet.plugin.JetLightProjectDescriptor;
 import org.jetbrains.jet.plugin.PluginTestCaseBase;
 
@@ -62,6 +63,10 @@ public class JetJavaFacadeTest extends LightCodeInsightFixtureTestCase {
         doTestWrapMethod(true);
     }
 
+    public void testWrapFunWithDefaultParam() {
+        doTestWrapMethod(true);
+    }
+
     public void testWrapFunWithImplInTrait() {
         doTestWrapMethod(true);
     }
@@ -86,6 +91,19 @@ public class JetJavaFacadeTest extends LightCodeInsightFixtureTestCase {
         doTestWrapClass();
     }
 
+    public void testEa38770() {
+        myFixture.configureByFile(getTestName(true) + ".kt");
+
+        PsiReference reference = myFixture.getFile().findReferenceAt(myFixture.getCaretOffset());
+        assertNotNull(reference);
+        PsiElement element = reference.resolve();
+        assertNotNull(element);
+        assertInstanceOf(element, JetNamedFunction.class);
+        JetNamedFunction toString = (JetNamedFunction) element;
+
+        assertNull("There should be no wrapper for built-in function", JetLightClass.wrapMethod(toString));
+    }
+
     public void testInnerClass() throws Exception {
         myFixture.configureByFile(getTestName(true) + ".kt");
 
@@ -106,16 +124,21 @@ public class JetJavaFacadeTest extends LightCodeInsightFixtureTestCase {
 
         assertNotNull(theClass);
 
-        PsiField classobj = theClass.findFieldByName("$classobj", false);
-        assertTrue(classobj != null && classobj.hasModifierProperty(PsiModifier.STATIC));
+        PsiField classobjField = theClass.findFieldByName("$classobj", false);
+        assertNull(classobjField);
 
-        PsiType type = classobj.getType();
-        assertTrue(type instanceof PsiClassType);
+        final PsiClass classObjectClass = theClass.findInnerClassByName("ClassObject$", false);
+        assertNotNull(classObjectClass);
+        assertEquals("foo.TheClass.ClassObject$", classObjectClass.getQualifiedName());
+        assertTrue(classObjectClass.hasModifierProperty(PsiModifier.STATIC));
 
-        assertEquals("foo.TheClass.ClassObject$", type.getCanonicalText());
+        final PsiField instance = classObjectClass.findFieldByName(JvmAbi.INSTANCE_FIELD, false);
+        assertNotNull(instance);
+        assertEquals("foo.TheClass.ClassObject$", instance.getType().getCanonicalText());
+        assertTrue(instance.hasModifierProperty(PsiModifier.PUBLIC));
+        assertTrue(instance.hasModifierProperty(PsiModifier.STATIC));
+        assertTrue(instance.hasModifierProperty(PsiModifier.FINAL));
 
-        PsiClass classObjectClass = ((PsiClassType) type).resolve();
-        assertTrue(classObjectClass != null && classObjectClass.hasModifierProperty(PsiModifier.STATIC));
         PsiMethod[] methods = classObjectClass.findMethodsByName("getOut", false);
         
         assertEquals("java.io.PrintStream", methods[0].getReturnType().getCanonicalText());

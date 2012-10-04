@@ -25,64 +25,56 @@ import org.jetbrains.jet.lang.resolve.java.JvmStdlibNames;
 
 /**
  * @author Stepan Koltsov
+ * @author alex.tkachman
  */
 public class JetValueParameterAnnotation extends PsiAnnotationWrapper {
-    
-    public JetValueParameterAnnotation(@Nullable PsiAnnotation psiAnnotation) {
+    private static final JetValueParameterAnnotation NULL_ANNOTATION = new JetValueParameterAnnotation(null);
+    static {
+        NULL_ANNOTATION.checkInitialized();
+    }
+
+    private String name;
+    private String type;
+    private boolean receiver;
+    private boolean hasDefaultValue;
+
+    private JetValueParameterAnnotation(@Nullable PsiAnnotation psiAnnotation) {
         super(psiAnnotation);
     }
-    
-    private String name;
+
+    @Override
+    protected void initialize() {
+        name = getStringAttribute(JvmStdlibNames.JET_VALUE_PARAMETER_NAME_FIELD, "");
+        type = getStringAttribute(JvmStdlibNames.JET_VALUE_PARAMETER_TYPE_FIELD, "");
+        receiver = getBooleanAttribute(JvmStdlibNames.JET_VALUE_PARAMETER_RECEIVER_FIELD, false);
+        hasDefaultValue = getBooleanAttribute(JvmStdlibNames.JET_VALUE_PARAMETER_HAS_DEFAULT_VALUE_FIELD, false);
+    }
+
     @NotNull
     public String name() {
-        if (name == null) {
-            name = getStringAttribute(JvmStdlibNames.JET_VALUE_PARAMETER_NAME_FIELD, "");
-        }
+        checkInitialized();
         return name;
     }
-    
-    private String type;
+
     @NotNull
     public String type() {
-        if (type == null) {
-            type = getStringAttribute(JvmStdlibNames.JET_VALUE_PARAMETER_TYPE_FIELD, "");
-        }
+        checkInitialized();
         return type;
     }
 
-    private boolean nullable;
-    private boolean nullableInitialized = false;
-    public boolean nullable() {
-        if (!nullableInitialized) {
-            nullable = getBooleanAttribute(JvmStdlibNames.JET_VALUE_PARAMETER_NULLABLE_FIELD, false);
-            nullableInitialized = true;
-        }
-        return nullable;
-    }
-
-    private boolean receiver;
-    private boolean receiverInitialized = false;
     public boolean receiver() {
-        if (!receiverInitialized) {
-            receiver = getBooleanAttribute(JvmStdlibNames.JET_VALUE_PARAMETER_RECEIVER_FIELD, false);
-            receiverInitialized = true;
-        }
+        checkInitialized();
         return receiver;
     }
     
-    private boolean hasDefaultValue;
-    private boolean hasDefaultValueInitialized = false;
     public boolean hasDefaultValue() {
-        if (!hasDefaultValueInitialized) {
-            hasDefaultValue = getBooleanAttribute(JvmStdlibNames.JET_VALUE_PARAMETER_HAS_DEFAULT_VALUE_FIELD, false);
-            hasDefaultValueInitialized = true;
-        }
+        checkInitialized();
         return hasDefaultValue;
     }
     
     public static JetValueParameterAnnotation get(PsiParameter psiParameter) {
-        return new JetValueParameterAnnotation(
-                JavaDescriptorResolver.findAnnotation(psiParameter, JvmStdlibNames.JET_VALUE_PARAMETER.getFqName().getFqName()));
+        final PsiAnnotation annotation =
+                JavaDescriptorResolver.findAnnotation(psiParameter, JvmStdlibNames.JET_VALUE_PARAMETER.getFqName().getFqName());
+        return annotation != null ? new JetValueParameterAnnotation(annotation) : NULL_ANNOTATION;
     }
-    
 }

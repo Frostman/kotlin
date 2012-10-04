@@ -16,8 +16,8 @@ public var asserter: Asserter
     get() {
         if (_asserter == null) {
             val klass = javaClass<Asserter>()
-            val loader = ServiceLoader.load(klass)!!
-            for (a in loader.iterator()!!) {
+            val loader = ServiceLoader.load(klass)
+            for (a in loader.iterator()) {
                 if (a != null) {
                     _asserter = a
                     break
@@ -28,7 +28,7 @@ public var asserter: Asserter
             }
             //debug("using asserter $_asserter")
         }
-        return _asserter.sure()
+        return _asserter!!
     }
 
     set(value) {

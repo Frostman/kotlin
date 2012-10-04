@@ -19,7 +19,8 @@ package org.jetbrains.jet.compiler.android;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
-import java.util.*;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * @author Natalia.Ukhorskaya
@@ -77,6 +78,8 @@ public class SpecialFiles {
     }
 
     private static void fillExcludedFiles() {
+        excludedFiles.add("kt2781.kt"); // Must compile Java files before
+        excludedFiles.add("simpleJavaInnerEnum.kt"); // Must compile Java files before
         excludedFiles.add("referencesStaticInnerClassMethod.kt"); // Must compile Java files before
         excludedFiles.add("referencesStaticInnerClassMethodL2.kt"); // Must compile Java files before
         excludedFiles.add("simpleJavaEnum.kt"); // Must compile Java files before
@@ -113,6 +116,7 @@ public class SpecialFiles {
         excludedFiles.add("kt2060_1.kt"); // MultiFileTest not supported yet
         excludedFiles.add("kt2257_1.kt"); // MultiFileTest not supported yet
         excludedFiles.add("kt1528_1.kt"); // MultiFileTest not supported yet
+        excludedFiles.add("thisPackage.kt"); // MultiFileTest not supported yet
 
         excludedFiles.add("kt684.jet"); // StackOverflow with StringBuilder (escape())
 
@@ -120,6 +124,8 @@ public class SpecialFiles {
         excludedFiles.add("kt1779.kt"); // Bug KT-2202 - private fun tryToComputeNext() in AbstractIterator.kt
         excludedFiles.add("kt344.jet"); // Bug KT-2251
         excludedFiles.add("kt529.kt");  // Bug
+
+        excludedFiles.add("noClassObjectForJavaClass.kt");
     }
 
     private SpecialFiles() {

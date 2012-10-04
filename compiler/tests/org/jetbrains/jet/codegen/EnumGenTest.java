@@ -109,6 +109,10 @@ public class EnumGenTest extends CodegenTestCase {
     public void testSimpleJavaEnum() throws Exception {
         blackBoxFileWithJava("enum/simpleJavaEnum.kt");
     }
+
+    public void testSimpleJavaInnerEnum() throws Exception {
+        blackBoxFileWithJava("enum/simpleJavaInnerEnum.kt");
+    }
     
     public void testSimpleJavaEnumWithStaticImport() throws Exception {
         blackBoxFileWithJava("enum/simpleJavaEnumWithStaticImport.kt");
@@ -154,5 +158,13 @@ public class EnumGenTest extends CodegenTestCase {
 
     public void testEntryWithInner() {
         blackBoxFile("enum/entrywithinner.kt");
+    }
+
+    public void testInner() {
+        blackBoxFile("enum/inner.kt");
+    }
+
+    public void testInnerWithExistingClassObject() {
+        blackBoxFile("enum/innerWithExistingClassObject.kt");
     }
 }

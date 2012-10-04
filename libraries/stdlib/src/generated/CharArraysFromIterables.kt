@@ -151,7 +151,7 @@ public inline fun CharArray.forEach(operation: (Char) -> Unit) : Unit = for (ele
  *
  * @includeFunctionBody ../../test/CollectionTest.kt fold
  */
-public inline fun CharArray.fold(initial: Char, operation: (Char, Char) -> Char): Char {
+public inline fun <R> CharArray.fold(initial: R, operation: (R, Char) -> R): R {
     var answer = initial
     for (element in this) answer = operation(answer, element)
     return answer
@@ -162,7 +162,7 @@ public inline fun CharArray.fold(initial: Char, operation: (Char, Char) -> Char)
  *
  * @includeFunctionBody ../../test/CollectionTest.kt foldRight
  */
-public inline fun CharArray.foldRight(initial: Char, operation: (Char, Char) -> Char): Char = reverse().fold(initial, {x, y -> operation(y, x)})
+public inline fun <R> CharArray.foldRight(initial: R, operation: (Char, R) -> R): R = reverse().fold(initial, {x, y -> operation(y, x)})
 
 
 /**
@@ -172,7 +172,7 @@ public inline fun CharArray.foldRight(initial: Char, operation: (Char, Char) -> 
  * @includeFunctionBody ../../test/CollectionTest.kt reduce
  */
 public inline fun CharArray.reduce(operation: (Char, Char) -> Char): Char {
-    val iterator = this.iterator().sure()
+    val iterator = this.iterator()!!
     if (!iterator.hasNext()) {
         throw UnsupportedOperationException("Empty iterable can't be reduced")
     }
@@ -226,7 +226,7 @@ public inline fun <K> CharArray.groupByTo(result: MutableMap<K, MutableList<Char
 public inline fun CharArray.makeString(separator: String = ", ", prefix: String = "", postfix: String = "", limit: Int = -1, truncated: String = "..."): String {
     val buffer = StringBuilder()
     appendString(buffer, separator, prefix, postfix, limit, truncated)
-    return buffer.toString().sure()
+    return buffer.toString()!!
 }
 
 /** Returns a list containing the everything but the first elements that satisfy the given *predicate* */

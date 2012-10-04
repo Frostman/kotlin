@@ -29,21 +29,32 @@ import org.jetbrains.jet.lang.resolve.java.JvmStdlibNames;
  * @since 6/1/12
  */
 public class KotlinSignatureAnnotation extends PsiAnnotationWrapper {
-    public KotlinSignatureAnnotation(@Nullable PsiAnnotation psiAnnotation) {
-        super(psiAnnotation);
+    private static final KotlinSignatureAnnotation NULL_ANNOTATION = new KotlinSignatureAnnotation(null);
+    static {
+        NULL_ANNOTATION.checkInitialized();
     }
 
     private String signature;
 
+    private KotlinSignatureAnnotation(@Nullable PsiAnnotation psiAnnotation) {
+        super(psiAnnotation);
+    }
+
+    @Override
+    protected void initialize() {
+        signature = StringUtil.unescapeStringCharacters(getStringAttribute(JvmStdlibNames.KOTLIN_SIGNATURE_VALUE_METHOD, ""));
+    }
+
+    @NotNull
     public String signature() {
-        if (signature == null) {
-            signature = StringUtil.unescapeStringCharacters(getStringAttribute(JvmStdlibNames.KOTLIN_SIGNATURE_VALUE_METHOD, ""));
-        }
+        checkInitialized();
         return signature;
     }
 
     @NotNull
-    public static KotlinSignatureAnnotation get(PsiMethod psiClass) {
-        return new KotlinSignatureAnnotation(JavaDescriptorResolver.findAnnotation(psiClass, JvmStdlibNames.KOTLIN_SIGNATURE.getFqName().getFqName()));
+    public static KotlinSignatureAnnotation get(PsiMethod psiMethod) {
+        final PsiAnnotation annotation =
+                JavaDescriptorResolver.findAnnotation(psiMethod, JvmStdlibNames.KOTLIN_SIGNATURE.getFqName().getFqName());
+        return annotation != null ? new KotlinSignatureAnnotation(annotation) : NULL_ANNOTATION;
     }
 }

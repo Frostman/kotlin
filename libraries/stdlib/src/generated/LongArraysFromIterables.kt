@@ -151,7 +151,7 @@ public inline fun LongArray.forEach(operation: (Long) -> Unit) : Unit = for (ele
  *
  * @includeFunctionBody ../../test/CollectionTest.kt fold
  */
-public inline fun LongArray.fold(initial: Long, operation: (Long, Long) -> Long): Long {
+public inline fun <R> LongArray.fold(initial: R, operation: (R, Long) -> R): R {
     var answer = initial
     for (element in this) answer = operation(answer, element)
     return answer
@@ -162,7 +162,7 @@ public inline fun LongArray.fold(initial: Long, operation: (Long, Long) -> Long)
  *
  * @includeFunctionBody ../../test/CollectionTest.kt foldRight
  */
-public inline fun LongArray.foldRight(initial: Long, operation: (Long, Long) -> Long): Long = reverse().fold(initial, {x, y -> operation(y, x)})
+public inline fun <R> LongArray.foldRight(initial: R, operation: (Long, R) -> R): R = reverse().fold(initial, {x, y -> operation(y, x)})
 
 
 /**
@@ -172,7 +172,7 @@ public inline fun LongArray.foldRight(initial: Long, operation: (Long, Long) -> 
  * @includeFunctionBody ../../test/CollectionTest.kt reduce
  */
 public inline fun LongArray.reduce(operation: (Long, Long) -> Long): Long {
-    val iterator = this.iterator().sure()
+    val iterator = this.iterator()!!
     if (!iterator.hasNext()) {
         throw UnsupportedOperationException("Empty iterable can't be reduced")
     }
@@ -226,7 +226,7 @@ public inline fun <K> LongArray.groupByTo(result: MutableMap<K, MutableList<Long
 public inline fun LongArray.makeString(separator: String = ", ", prefix: String = "", postfix: String = "", limit: Int = -1, truncated: String = "..."): String {
     val buffer = StringBuilder()
     appendString(buffer, separator, prefix, postfix, limit, truncated)
-    return buffer.toString().sure()
+    return buffer.toString()!!
 }
 
 /** Returns a list containing the everything but the first elements that satisfy the given *predicate* */

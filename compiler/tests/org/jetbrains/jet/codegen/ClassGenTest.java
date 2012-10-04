@@ -386,7 +386,7 @@ public class ClassGenTest extends CodegenTestCase {
     public void testKt1018() throws Exception {
         createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
         blackBoxFile("regressions/kt1018.kt");
-        System.out.println(generateToText());
+        //System.out.println(generateToText());
     }
 
     public void testKt1120() throws Exception {
@@ -441,7 +441,7 @@ public class ClassGenTest extends CodegenTestCase {
     }
 
     public void testKt1538() throws Exception {
-        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.ALL);
         blackBoxFile("regressions/kt1538.kt");
     }
 
@@ -545,6 +545,11 @@ public class ClassGenTest extends CodegenTestCase {
         blackBoxMultiFile("regressions/kt2566_2.kt");
     }
 
+    public void testKt2477() {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        blackBoxFile("regressions/kt2477.kt");
+    }
+
     public void testKt2485() {
         createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
         blackBoxMultiFile("regressions/kt2485.kt");
@@ -600,5 +605,15 @@ public class ClassGenTest extends CodegenTestCase {
     public void testKt2626() {
         createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
         blackBoxFile("regressions/kt2626.kt");
+    }
+
+    public void testKt2781() throws Exception {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        blackBoxFileWithJava("regressions/kt2781.kt", true);
+    }
+
+    public void testKt2607() throws Exception {
+        createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.JDK_ONLY);
+        blackBoxFile("regressions/kt2607.kt");
     }
 }

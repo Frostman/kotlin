@@ -147,10 +147,6 @@ public class StdlibTest extends CodegenTestCase {
         blackBoxFile("regressions/kt1568.kt");
     }
 
-    public void testKt1515() throws Exception {
-        blackBoxFile("regressions/kt1515.kt");
-    }
-
     public void testKt1592 () throws MalformedURLException, ClassNotFoundException, NoSuchMethodException, InvocationTargetException, IllegalAccessException {
         loadFile("regressions/kt1592.kt");
         ClassFileFactory codegens = generateClassesInFile();
@@ -376,5 +372,13 @@ public class StdlibTest extends CodegenTestCase {
 
     public void testKt2596() {
         blackBoxFile("regressions/kt2596.kt");
+    }
+
+    public void testCollections() {
+        blackBoxFile("jdk-annotations/collections.kt");
+    }
+
+    public void testNoClassObjectForJavaClass() throws Exception {
+        blackBoxFileWithJava("stdlib/noClassObjectForJavaClass.kt");
     }
 }
